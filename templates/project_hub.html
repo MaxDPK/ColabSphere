@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Project Hub</title>
+</head>
+<body>
+    <h1>Project: {{ project.name }}</h1>
+    
+    <h2>Team Members</h2>
+    <ul>
+        {% for member in project.members %}
+            <li>{{ member }}</li>
+        {% endfor %}
+    </ul>
+
+    <a href="/menu">Back to Menu</a>
+</body>
+</html>

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Menu</title>
+</head>
+<body>
+    <h1>Welcome, {{ user }}</h1>
+    <h2>Your Projects</h2>
+    <ul>
+        {% for project in projects %}
+            <li><a href="/project_hub/{{ project.code }}">{{ project.name }}</a></li>
+        {% endfor %}
+    </ul>
+
+    <h3>Create a New Project</h3>
+    <form method="POST" action="/create_project">
+        <label>Project Name:</label>
+        <input type="text" name="project_name" required>
+        <button type="submit">Create Project</button>
+    </form>
+
+    <h3>Join a Project</h3>
+    <form method="POST" action="/join_project">
+        <label>Project Code:</label>
+        <input type="text" name="project_code" required>
+        <button type="submit">Join Project</button>
+    </form>
+
+    <a href="/logout">Logout</a>
+</body>
+</html>
