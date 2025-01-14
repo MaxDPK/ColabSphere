@@ -8,12 +8,13 @@
     <h2>Your Projects</h2>
     <ul>
         {% for project in projects %}
-            <li><a href="/project_hub/{{ project.code }}">{{ project.name }}</a></li>
+            <li><a href="/project_hub/{{ project.code }}?user={{ user }}">{{project.name}}</a></li>
         {% endfor %}
     </ul>
 
     <h3>Create a New Project</h3>
     <form method="POST" action="/create_project">
+        <input type="hidden" name="user" value="{{ user }}">
         <label>Project Name:</label>
         <input type="text" name="project_name" required>
         <button type="submit">Create Project</button>

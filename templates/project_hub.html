@@ -2,17 +2,65 @@
 <html lang="en">
 <head>
     <title>Project Hub</title>
+    <script>
+        let ws;
+        const projectCode = "{{ project.code }}";
+
+        // Retrieve the username from the URL query parameters
+        function getUsernameFromQuery() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get("user");
+        }
+
+        const username = getUsernameFromQuery();  // Extract the username
+
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://${window.location.host}/ws/${projectCode}?user=${username}`);
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.action === "update") {
+                    updateOnlineStatus(data.online_users);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log("WebSocket closed. Reconnecting...");
+                setTimeout(connectWebSocket, 1000);  // Reconnect after 1 second
+            };
+        }
+
+        // Update the online status dynamically
+        function updateOnlineStatus(onlineUsers) {
+            const membersList = document.querySelectorAll(".member");
+            membersList.forEach((member) => {
+                const username = member.getAttribute("data-username");
+                if (onlineUsers.includes(username)) {
+                    member.querySelector(".status").textContent = "Online";
+                    member.querySelector(".status").style.color = "green";
+                } else {
+                    member.querySelector(".status").textContent = "Offline";
+                    member.querySelector(".status").style.color = "red";
+                }
+            });
+        }
+
+        // Initialize WebSocket connection on page load
+        window.onload = connectWebSocket;
+    </script>
 </head>
 <body>
     <h1>Project: {{ project.name }}</h1>
     
     <h2>Team Members</h2>
     <ul>
-        {% for member in project.members %}
-            <li>{{ member }}</li>
+        {% for member in members %}
+            <li class="member" data-username="{{ member }}">
+                {{ member }} - <span class="status">Offline</span>
+            </li>
         {% endfor %}
     </ul>
 
-    <a href="/menu">Back to Menu</a>
+    <a href="/menu?user={{ user }}">Back to Menu</a>
 </body>
 </html>

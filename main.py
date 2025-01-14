@@ -1,8 +1,9 @@
-from fastapi import FastAPI, Request, Form, Depends
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query, Form, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from models import User, Project, db
+from typing import Dict, List
 
 app = FastAPI()
 
@@ -11,6 +12,10 @@ app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+
+# Track online users and WebSocket connections per project
+online_users: Dict[str, set] = {}
+project_connections: Dict[str, List[WebSocket]] = {}
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -27,10 +32,10 @@ async def login_page(request: Request):
 async def login(username: str = Form(...), password: str = Form(...)):
     user = db.get_user(username)
     if user and user.password == password:
-        response = RedirectResponse("/menu", status_code=303)
-        response.set_cookie(key="user", value=username)
-        return response
+        # Redirect to menu with the username in the query string
+        return RedirectResponse(f"/menu?user={username}", status_code=303)
     return "Invalid credentials"
+
 
 @app.get("/signup", response_class=HTMLResponse)
 async def signup_page(request: Request):
@@ -45,13 +50,13 @@ async def signup(username: str = Form(...), password: str = Form(...)):
     return "User already exists"
 
 @app.get("/menu", response_class=HTMLResponse)
-async def menu(request: Request):
-    user = request.cookies.get("user")
-    if not user:
-        return RedirectResponse("/login", status_code=303)
+async def menu(request: Request, user: str):
     user_data = db.get_user(user)
+    if not user_data:
+        return RedirectResponse("/login", status_code=303)
     projects = db.get_user_projects(user_data.username)
     return templates.TemplateResponse("menu.html", {"request": request, "projects": projects, "user": user})
+
 
 @app.post("/create_project")
 async def create_project(request: Request, project_name: str = Form(...)):
@@ -75,16 +80,66 @@ async def join_project(request: Request, project_code: str = Form(...)):
         return "Invalid project code or already a member"
 
 @app.get("/project_hub/{project_code}", response_class=HTMLResponse)
-async def project_hub(request: Request, project_code: str):
-    user = request.cookies.get("user")
-    if not user:
-        return RedirectResponse("/login", status_code=303)
+async def project_hub(request: Request, project_code: str, user: str):
     project = db.get_project(project_code)
+
     if not project:
         return "Invalid project"
+    
     if user not in project.members:
         return "You are not a member of this project"
-    return templates.TemplateResponse("project_hub.html", {"request": request, "project": project})
+    
+    return templates.TemplateResponse("project_hub.html", {
+        "request": request,
+        "project": project,
+        "members": project.members,
+        "user": user
+    })
+
+
+
+@app.websocket("/ws/{project_code}")
+async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str = Query(...)):
+    await websocket.accept()
+
+    # Add the WebSocket to the project's connection list
+    if project_code not in project_connections:
+        project_connections[project_code] = []
+    project_connections[project_code].append(websocket)
+
+    # Add the user to the online list for the project
+    if project_code not in online_users:
+        online_users[project_code] = set()
+    online_users[project_code].add(user)
+
+    # Notify all connected clients about the updated online users
+    await notify_project_users(project_code)
+
+    try:
+        # Keep the WebSocket connection alive
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        # Handle WebSocket disconnection
+        project_connections[project_code].remove(websocket)
+        online_users[project_code].remove(user)
+
+        # Notify remaining clients about the updated online users
+        await notify_project_users(project_code)
+
+
+async def notify_project_users(project_code: str):
+    """Send the updated online users list to all WebSocket clients in the project."""
+    if project_code in project_connections:
+        for connection in project_connections[project_code]:
+            try:
+                await connection.send_json({
+                    "action": "update",
+                    "online_users": list(online_users[project_code])
+                })
+            except Exception:
+                # If a WebSocket connection is closed unexpectedly, remove it
+                project_connections[project_code].remove(connection)
 
 @app.get("/logout")
 async def logout():
