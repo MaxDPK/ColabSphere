@@ -2,60 +2,16 @@
 <html lang="en">
 <head>
     <title>Project Hub</title>
-    <script>
-        let ws;
-        const projectCode = "{{ project.code }}";
-
-        // Retrieve the username from the URL query parameters
-        function getUsernameFromQuery() {
-            const params = new URLSearchParams(window.location.search);
-            return params.get("user");
-        }
-
-        const username = getUsernameFromQuery();  // Extract the username
-
-        function connectWebSocket() {
-            const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-            ws = new WebSocket(`${protocol}://${window.location.host}/ws/${projectCode}?user=${username}`);
-
-
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.action === "update") {
-                    updateOnlineStatus(data.online_users);
-                }
-            };
-
-            ws.onclose = () => {
-                console.log("WebSocket closed. Reconnecting...");
-                setTimeout(connectWebSocket, 1000);  // Reconnect after 1 second
-            };
-        }
-
-        // Update the online status dynamically
-        function updateOnlineStatus(onlineUsers) {
-            const membersList = document.querySelectorAll(".member");
-            membersList.forEach((member) => {
-                const username = member.getAttribute("data-username");
-                if (onlineUsers.includes(username)) {
-                    member.querySelector(".status").textContent = "Online";
-                    member.querySelector(".status").style.color = "green";
-                } else {
-                    member.querySelector(".status").textContent = "Offline";
-                    member.querySelector(".status").style.color = "red";
-                }
-            });
-        }
-
-        // Initialize WebSocket connection on page load
-        window.onload = connectWebSocket;
-    </script>
+    <!-- PyScript CSS -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <!-- PyScript Core -->
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
 </head>
 <body>
     <h1>Project: {{ project.name }}</h1>
-    
+
     <h2>Team Members</h2>
-    <ul>
+    <ul id="members-list">
         {% for member in members %}
             <li class="member" data-username="{{ member }}">
                 {{ member }} - <span class="status">Offline</span>
@@ -64,5 +20,65 @@
     </ul>
 
     <a href="/menu?user={{ user }}">Back to Menu</a>
+
+    <!-- PyScript Code -->
+    <py-script>
+        import asyncio
+        from js import document, WebSocket, setTimeout, console, window
+        from pyodide.ffi import create_proxy
+
+        class ProjectHub:
+            def __init__(self, project_code, username):
+                self.project_code = project_code
+                self.username = username
+                self.ws = None
+
+            async def connect_websocket(self):
+                """Establish WebSocket connection and handle events."""
+                protocol = "wss" if window.location.protocol == "https:" else "ws"
+                ws_url = f"{protocol}://{window.location.host}/ws/{self.project_code}?user={self.username}"
+                self.ws = WebSocket.new(ws_url)
+
+                # Create proxies for event handlers
+                message_proxy = create_proxy(self.on_message)
+                close_proxy = create_proxy(self.on_close)
+
+                # Attach event listeners
+                self.ws.addEventListener("message", message_proxy)
+                self.ws.addEventListener("close", close_proxy)
+
+            def on_message(self, event):
+                """Handle WebSocket messages."""
+                # Parse the incoming message and convert it to a Python dictionary
+                js_data = window.JSON.parse(event.data)
+                data = dict(js_data.to_py())
+
+                if data["action"] == "update":
+                    self.update_online_status(data["online_users"])
+
+            def on_close(self, event):
+                """Handle WebSocket disconnection."""
+                console.log("WebSocket closed. Reconnecting...")
+                setTimeout(lambda: asyncio.ensure_future(self.connect_websocket()), 1000)
+
+            def update_online_status(self, online_users):
+                """Update the DOM to reflect the online/offline status of members."""
+                members_list = document.querySelectorAll(".member")
+                for member in members_list:
+                    member_username = member.getAttribute("data-username")
+                    status_element = member.querySelector(".status")
+                    if member_username in online_users:
+                        status_element.textContent = "Online"
+                        status_element.style.color = "green"
+                    else:
+                        status_element.textContent = "Offline"
+                        status_element.style.color = "red"
+
+        # Initialize the ProjectHub class and connect WebSocket
+        project_code = "{{ project.code }}"
+        username = window.location.search.split("user=")[-1]
+        hub = ProjectHub(project_code, username)
+        asyncio.ensure_future(hub.connect_websocket())
+    </py-script>
 </body>
 </html>
