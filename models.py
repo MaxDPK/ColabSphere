@@ -19,6 +19,8 @@ class Project(Persistent):
         self.owner = owner
         self.code = str(uuid.uuid4())[:8]  # Generate a unique project code
         self.members = [owner]  # List of usernames
+        self.gantt_chart = []  # List to store Gantt chart activities
+
 
 
 class Database:
@@ -80,6 +82,19 @@ class Database:
         user._p_changed = True  # Mark the user object as changed
         transaction.commit()  # Persist the changes
         return True
+    
+    def save_gantt_chart(self, project_code, activities):
+        """Save Gantt chart activities to a specific project."""
+        project = self.get_project(project_code)
+        if not project:
+            return False, "Invalid project code"
+
+        # Update the Gantt chart
+        project.gantt_chart = activities
+        project._p_changed = True  # Mark the project as changed
+        transaction.commit()  # Persist the changes
+        return True, "Gantt chart saved successfully"
+
 
     def close(self):
         self.connection.close()

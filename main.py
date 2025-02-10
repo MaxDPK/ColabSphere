@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query, Form, Depends
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query, Form, Depends, Body
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -21,7 +21,7 @@ project_connections: Dict[str, List[WebSocket]] = {}
 async def home(request: Request):
     user = request.cookies.get("user")
     if user:
-        return RedirectResponse("/menu", status_code=303)
+        return RedirectResponse(f"/menu?user={user}", status_code=303)
     return RedirectResponse("/login", status_code=303)
 
 @app.get("/login", response_class=HTMLResponse)
@@ -32,9 +32,11 @@ async def login_page(request: Request):
 async def login(username: str = Form(...), password: str = Form(...)):
     user = db.get_user(username)
     if user and user.password == password:
-        # Redirect to menu with the username in the query string
-        return RedirectResponse(f"/menu?user={username}", status_code=303)
+        response = RedirectResponse(f"/menu?user={username}", status_code=303)
+        response.set_cookie(key="user", value=username)  # Set the user cookie
+        return response
     return "Invalid credentials"
+
 
 
 @app.get("/signup", response_class=HTMLResponse)
@@ -44,10 +46,11 @@ async def signup_page(request: Request):
 @app.post("/signup")
 async def signup(username: str = Form(...), password: str = Form(...)):
     if db.add_user(username, password):
-        response = RedirectResponse("/menu", status_code=303)
-        response.set_cookie(key="user", value=username)
+        response = RedirectResponse(f"/menu?user={username}", status_code=303)
+        response.set_cookie(key="user", value=username)  # Set the user cookie
         return response
     return "User already exists"
+
 
 @app.get("/menu", response_class=HTMLResponse)
 async def menu(request: Request, user: str):
@@ -60,13 +63,14 @@ async def menu(request: Request, user: str):
 
 @app.post("/create_project")
 async def create_project(request: Request, project_name: str = Form(...)):
-    user = request.cookies.get("user")
+    user = request.cookies.get("user")  # Get the user from cookies
     if not user:
-        return RedirectResponse("/login", status_code=303)
-    project_code = db.create_project(project_name, user)
-    response = RedirectResponse("/menu", status_code=303)
-    # Optionally, you can flash a message or display the project code
-    return response
+        return RedirectResponse("/login", status_code=303)  # Redirect to login if no user
+
+    project_code = db.create_project(project_name, user)  # Create the project
+    # Redirect to /menu with the user query parameter
+    return RedirectResponse(f"/menu?user={user}", status_code=303)
+
 
 @app.post("/join_project")
 async def join_project(request: Request, project_code: str = Form(...)):
@@ -75,7 +79,7 @@ async def join_project(request: Request, project_code: str = Form(...)):
         return RedirectResponse("/login", status_code=303)
     success = db.add_user_to_project(user, project_code)
     if success:
-        return RedirectResponse("/menu", status_code=303)
+        return RedirectResponse(f"/menu?user={user}", status_code=303)
     else:
         return "Invalid project code or already a member"
 
@@ -140,6 +144,70 @@ async def notify_project_users(project_code: str):
             except Exception:
                 # If a WebSocket connection is closed unexpectedly, remove it
                 project_connections[project_code].remove(connection)
+
+
+@app.get("/gantt_chart", response_class=HTMLResponse)
+async def gantt_chart(request: Request, project_code: str, user: str):
+    project = db.get_project(project_code)
+    if not project:
+        return "Invalid project"
+    if user not in project.members:
+        return "You are not a member of this project"
+    return templates.TemplateResponse("gantt_chart.html", {
+        "request": request,
+        "project_code": project_code,
+        "user": user,
+        "members": project.members,  # Pass the list of team members
+        "activities": getattr(project, "gantt_chart", [])  # Safeguard if gantt_chart doesn't exist yet
+    })
+
+
+
+@app.get("/gantt_chart", response_class=HTMLResponse)
+async def gantt_chart(request: Request, project_code: str, user: str):
+    project = db.get_project(project_code)
+    if not project:
+        return "Invalid project"
+    if user not in project.members:
+        return "You are not a member of this project"
+    
+    activities = getattr(project, "gantt_chart", [])  # Retrieve Gantt chart activities
+    return templates.TemplateResponse("gantt_chart.html", {
+        "request": request,
+        "project_code": project_code,
+        "user": user,
+        "members": project.members,
+        "activities": activities  # Pass activities to the template
+    })
+
+@app.get("/get_activities")
+async def get_activities(project_code: str):
+    project = db.get_project(project_code)
+    if not project:
+        return {"activities": []}  # Return an empty list if the project is invalid
+    return {"activities": getattr(project, "gantt_chart", [])}
+
+
+
+
+@app.post("/save_gantt_chart")
+async def save_gantt_chart(data: dict = Body(...)):
+    print(data)
+    project_code = data.get("project_code")
+    activities = data.get("activities", [])
+
+    # Call the database method to save the Gantt chart
+    success, message = db.save_gantt_chart(project_code, activities)
+
+    if not success:
+        return {"message": message}  # Return error message if saving failed
+
+    return {"message": message}  # Return success message
+
+
+
+
+
 
 @app.get("/logout")
 async def logout():
