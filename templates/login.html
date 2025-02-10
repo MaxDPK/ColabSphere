@@ -1,17 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login</title>
+    <link href='https://fonts.googleapis.com/css?family=Lalezar' rel='stylesheet'>
+    <link href='https://fonts.googleapis.com/css?family=Albert Sans' rel='stylesheet'>
+    <link rel="stylesheet" href="./static/login.css">
 </head>
 <body>
-    <h1>{{ 'Sign Up' if signup else 'Login' }}</h1>
-    <form method="POST" action="{{ '/signup' if signup else '/login' }}">
-        <label>Username:</label>
-        <input type="text" name="username" required>
-        <label>Password:</label>
-        <input type="password" name="password" required>
-        <button type="submit">{{ 'Sign Up' if signup else 'Login' }}</button>
-    </form>
-    <a href="{{ '/signup' if not signup else '/login' }}">{{ 'Sign Up' if not signup else 'Login' }}</a>
+    <div class="container">
+        <div class="login-box">
+            <h1>Welcome back!</h1>
+            <p>Simplify your workflow and boost your productivity with Colabsphere.</p>
+            <form method="POST" action="/login">
+                <input type="text" placeholder="Email/ Username" name="username" required>
+                <input type="password" placeholder="Password" name="password" required>
+                <a href="#" class="forgot-password">Forgot Password?</a>
+                <button type="submit">Login</button>
+            </form>
+            
+            <!-- Display error message if exists -->
+            {% if error_message %}
+                <p style="color: red;">{{ error_message }}</p>
+            {% endif %}
+
+            <p class="register"> <span class="new-here">New here?</span> <a href="/signup">Register now</a></p>
+        </div>
+        <div class="illustration">
+            <img src="../seal.jpg" alt="Illustration">
+        </div>
+    </div>
 </body>
 </html>
