@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign up</title>
+    <link href='https://fonts.googleapis.com/css?family=Lalezar' rel='stylesheet'>
+    <link href='https://fonts.googleapis.com/css?family=Albert Sans' rel='stylesheet'>
+    <link rel="stylesheet" href="./static/signup.css">
+    <!-- PyScript CSS -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <!-- PyScript Core -->
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to ColabSphere!</h1>
+        <p>Create an account</p>
+        <form action="/signup" method="POST" id="signup-form">
+            <input type="text" placeholder="Username" name="username" id="username" required>
+            <input type="password" placeholder="Password" name="password" id="password" required>
+            <input type="password" placeholder="Confirm Password" name="confirm_password" id="confirm_password" required>
+            <button type="submit">Sign up</button>
+        </form>
+
+        <!-- Display error message if passwords do not match -->
+        {% if error_message %}
+            <p id="error-message" style="color: red;">{{ error_message }}</p>
+        {% endif %}
+    </div>
+
+    <!-- PyScript to validate passwords -->
+    <py-script>
+from pyscript import document
+
+def validate_password(event):
+    password = document.querySelector("#password").value
+    confirm_password = document.querySelector("#confirm_password").value
+    error_message = document.querySelector("#error-message")
+    
+    if password != confirm_password:
+        error_message.innerText = "Passwords do not match. Please try again."
+        event.preventDefault()  # Prevent form submission
+    else:
+        error_message.innerText = ""  # Clear error if passwords match
+
+# Attach the validate_password function to the form submit event
+form = document.querySelector("#signup-form")
+form.addEventListener("submit", validate_password)
+    </py-script>
+</body>
+</html>
