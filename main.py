@@ -19,35 +19,68 @@ project_connections: Dict[str, List[WebSocket]] = {}
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    user = request.cookies.get("user")
-    if user:
-        return RedirectResponse("/menu", status_code=303)
+    # Always redirect to /login when visiting the root URL
     return RedirectResponse("/login", status_code=303)
+
+
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.post("/login")
-async def login(username: str = Form(...), password: str = Form(...)):
+async def login(request: Request, username: str = Form(...), password: str = Form(...)):
     user = db.get_user(username)
-    if user and user.password == password:
-        # Redirect to menu with the username in the query string
-        return RedirectResponse(f"/menu?user={username}", status_code=303)
-    return "Invalid credentials"
+    if user:
+        if user.password == password:
+            # Set the user cookie after successful login
+            response = RedirectResponse(f"/menu?user={username}", status_code=303)
+            response.set_cookie(key="user", value=username)
+            return response
+        else:
+            # Return to login with error message for incorrect password
+            error_message = "Incorrect password. Please try again."
+            return templates.TemplateResponse("login.html", {"request": request, "error_message": error_message})
+    else:
+        # Return to login with error message for non-existent username
+        error_message = "Username does not exist. Please try again."
+        return templates.TemplateResponse("login.html", {"request": request, "error_message": error_message})
+
+
 
 
 @app.get("/signup", response_class=HTMLResponse)
 async def signup_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request, "signup": True})
+    return templates.TemplateResponse("signup.html", {"request": request, "signup": True})
 
 @app.post("/signup")
-async def signup(username: str = Form(...), password: str = Form(...)):
+async def signup(request: Request, username: str = Form(...), password: str = Form(...), confirm_password: str = Form(...)):
+    # Check if password and confirm password match
+    if password != confirm_password:
+        # Show user-friendly error message and stay on the same page
+        return templates.TemplateResponse("signup.html", {
+            "request": request,
+            "signup": True,
+            "error_message": "Passwords do not match. Please try again."  # Pass the error message to the template
+        })
+    
+    # Check if the user already exists
+    if db.get_user(username):
+        # Show user-friendly error message for existing username
+        return templates.TemplateResponse("signup.html", {
+            "request": request,
+            "signup": True,
+            "error_message": "User already exists. Please try a different username."  # Pass the error message to the template
+        })
+    
+    # Proceed with adding the user if passwords match and username is available
     if db.add_user(username, password):
-        response = RedirectResponse("/menu", status_code=303)
-        response.set_cookie(key="user", value=username)
-        return response
-    return "User already exists"
+        # Redirect to login page after successful signup
+        return RedirectResponse("/login", status_code=303)
+    
+    return "An unexpected error occurred."
+
+
 
 @app.get("/menu", response_class=HTMLResponse)
 async def menu(request: Request, user: str):
@@ -58,15 +91,25 @@ async def menu(request: Request, user: str):
     return templates.TemplateResponse("menu.html", {"request": request, "projects": projects, "user": user})
 
 
+
 @app.post("/create_project")
 async def create_project(request: Request, project_name: str = Form(...)):
+    # Ensure that the user is logged in
     user = request.cookies.get("user")
     if not user:
         return RedirectResponse("/login", status_code=303)
+    
+    # Log project_name for debugging
+    print(f"Received project name: {project_name}")
+    
+    # Call the database function to create the project
     project_code = db.create_project(project_name, user)
-    response = RedirectResponse("/menu", status_code=303)
-    # Optionally, you can flash a message or display the project code
+    
+    # Redirect to the menu page with the user query parameter
+    response = RedirectResponse(f"/menu?user={user}", status_code=303)
     return response
+
+
 
 @app.post("/join_project")
 async def join_project(request: Request, project_code: str = Form(...)):
