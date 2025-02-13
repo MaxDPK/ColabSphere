@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query, Form, Depends
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query, Form, Depends, Body
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -19,7 +19,9 @@ project_connections: Dict[str, List[WebSocket]] = {}
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    # Always redirect to /login when visiting the root URL
+    user = request.cookies.get("user")
+    if user:
+        return RedirectResponse(f"/menu?user={user}", status_code=303)
     return RedirectResponse("/login", status_code=303)
 
 
@@ -45,6 +47,7 @@ async def login(request: Request, username: str = Form(...), password: str = For
         # Return to login with error message for non-existent username
         error_message = "Username does not exist. Please try again."
         return templates.TemplateResponse("login.html", {"request": request, "error_message": error_message})
+
 
 
 
@@ -82,6 +85,7 @@ async def signup(request: Request, username: str = Form(...), password: str = Fo
 
 
 
+
 @app.get("/menu", response_class=HTMLResponse)
 async def menu(request: Request, user: str):
     user_data = db.get_user(user)
@@ -94,20 +98,14 @@ async def menu(request: Request, user: str):
 
 @app.post("/create_project")
 async def create_project(request: Request, project_name: str = Form(...)):
-    # Ensure that the user is logged in
-    user = request.cookies.get("user")
+    user = request.cookies.get("user")  # Get the user from cookies
     if not user:
-        return RedirectResponse("/login", status_code=303)
-    
-    # Log project_name for debugging
-    print(f"Received project name: {project_name}")
-    
-    # Call the database function to create the project
-    project_code = db.create_project(project_name, user)
-    
-    # Redirect to the menu page with the user query parameter
-    response = RedirectResponse(f"/menu?user={user}", status_code=303)
-    return response
+        return RedirectResponse("/login", status_code=303)  # Redirect to login if no user
+
+    project_code = db.create_project(project_name, user)  # Create the project
+    # Redirect to /menu with the user query parameter
+    return RedirectResponse(f"/menu?user={user}", status_code=303)
+
 
 
 
@@ -118,7 +116,7 @@ async def join_project(request: Request, project_code: str = Form(...)):
         return RedirectResponse("/login", status_code=303)
     success = db.add_user_to_project(user, project_code)
     if success:
-        return RedirectResponse("/menu", status_code=303)
+        return RedirectResponse(f"/menu?user={user}", status_code=303)
     else:
         return "Invalid project code or already a member"
 
@@ -183,6 +181,70 @@ async def notify_project_users(project_code: str):
             except Exception:
                 # If a WebSocket connection is closed unexpectedly, remove it
                 project_connections[project_code].remove(connection)
+
+
+@app.get("/gantt_chart", response_class=HTMLResponse)
+async def gantt_chart(request: Request, project_code: str, user: str):
+    project = db.get_project(project_code)
+    if not project:
+        return "Invalid project"
+    if user not in project.members:
+        return "You are not a member of this project"
+    return templates.TemplateResponse("gantt_chart.html", {
+        "request": request,
+        "project_code": project_code,
+        "user": user,
+        "members": project.members,  # Pass the list of team members
+        "activities": getattr(project, "gantt_chart", [])  # Safeguard if gantt_chart doesn't exist yet
+    })
+
+
+
+@app.get("/gantt_chart", response_class=HTMLResponse)
+async def gantt_chart(request: Request, project_code: str, user: str):
+    project = db.get_project(project_code)
+    if not project:
+        return "Invalid project"
+    if user not in project.members:
+        return "You are not a member of this project"
+    
+    activities = getattr(project, "gantt_chart", [])  # Retrieve Gantt chart activities
+    return templates.TemplateResponse("gantt_chart.html", {
+        "request": request,
+        "project_code": project_code,
+        "user": user,
+        "members": project.members,
+        "activities": activities  # Pass activities to the template
+    })
+
+@app.get("/get_activities")
+async def get_activities(project_code: str):
+    project = db.get_project(project_code)
+    if not project:
+        return {"activities": []}  # Return an empty list if the project is invalid
+    return {"activities": getattr(project, "gantt_chart", [])}
+
+
+
+
+@app.post("/save_gantt_chart")
+async def save_gantt_chart(data: dict = Body(...)):
+    print(data)
+    project_code = data.get("project_code")
+    activities = data.get("activities", [])
+
+    # Call the database method to save the Gantt chart
+    success, message = db.save_gantt_chart(project_code, activities)
+
+    if not success:
+        return {"message": message}  # Return error message if saving failed
+
+    return {"message": message}  # Return success message
+
+
+
+
+
 
 @app.get("/logout")
 async def logout():
