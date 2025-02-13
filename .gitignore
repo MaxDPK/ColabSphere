@@ -1,0 +1,4 @@
+__pycache__/
+database/data.fs
+database/data.fs.lock
+database/data.fs.tmp
