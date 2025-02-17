@@ -221,25 +221,43 @@ async def gantt_chart(request: Request, project_code: str, user: str):
 async def get_activities(project_code: str):
     project = db.get_project(project_code)
     if not project:
-        return {"activities": []}  # Return an empty list if the project is invalid
-    return {"activities": getattr(project, "gantt_chart", [])}
+        return {"activities": []}
+    
+    # Ensure assigned_to is converted back into a **semicolon-separated string**
+    activities = getattr(project, "gantt_chart", [])
+    for activity in activities:
+        if isinstance(activity.get("assigned_to"), list):
+            activity["assigned_to"] = ";".join(activity["assigned_to"])
+
+    return {"activities": activities}
+
 
 
 
 
 @app.post("/save_gantt_chart")
 async def save_gantt_chart(data: dict = Body(...)):
-    print(data)
     project_code = data.get("project_code")
     activities = data.get("activities", [])
 
-    # Call the database method to save the Gantt chart
+    for activity in activities:
+        if isinstance(activity.get("assigned_to"), str):
+            assigned_users = activity["assigned_to"].strip()
+            activity["assigned_to"] = assigned_users.split(";") if assigned_users else []
+    
+
     success, message = db.save_gantt_chart(project_code, activities)
 
-    if not success:
-        return {"message": message}  # Return error message if saving failed
+    if success:
+        # Notify WebSocket users
+        if project_code in project_connections:
+            for connection in project_connections[project_code]:
+                await connection.send_json({
+                    "action": "gantt_chart_update",
+                    "activities": activities
+                })
+    return {"message": message}
 
-    return {"message": message}  # Return success message
 
 
 
