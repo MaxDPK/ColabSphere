@@ -2,13 +2,42 @@
 <html lang="en">
 <head>
     <title>Menu</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        .profile-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .profile-container img {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 2px solid black;
+            object-fit: cover;
+        }
+    </style>
 </head>
 <body>
+
     <h1>Welcome, {{ user }}</h1>
+
+    <!-- Profile Picture Display -->
+    <div class="profile-container">
+        <img src="{{ profile_pic | safe }}" alt="Profile Picture">
+        <p>Profile Picture</p>
+    </div>
+
     <h2>Your Projects</h2>
     <ul>
         {% for project in projects %}
-            <li><a href="/project_hub/{{ project.code }}?user={{ user }}">{{project.name}}</a></li>
+            <li><a href="/project_hub/{{ project.code }}?user={{ user }}">{{ project.name }}</a></li>
         {% endfor %}
     </ul>
 
@@ -27,6 +56,10 @@
         <button type="submit">Join Project</button>
     </form>
 
+    <br>
     <a href="/logout">Logout</a>
+
+    
+
 </body>
 </html>

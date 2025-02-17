@@ -1,9 +1,13 @@
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query, Form, Depends, Body
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query, Form, Depends, Body, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from models import User, Project, db
 from typing import Dict, List
+import shutil
+import os
+from io import BytesIO
+import base64
 
 app = FastAPI()
 
@@ -18,11 +22,9 @@ online_users: Dict[str, set] = {}
 project_connections: Dict[str, List[WebSocket]] = {}
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
-    user = request.cookies.get("user")
-    if user:
-        return RedirectResponse(f"/menu?user={user}", status_code=303)
+async def home():
     return RedirectResponse("/login", status_code=303)
+
 
 
 
@@ -78,21 +80,77 @@ async def signup(request: Request, username: str = Form(...), password: str = Fo
     
     # Proceed with adding the user if passwords match and username is available
     if db.add_user(username, password):
-        # Redirect to login page after successful signup
-        return RedirectResponse("/login", status_code=303)
+        return RedirectResponse(f"/choose_profile_pic?user={username}", status_code=303)
     
     return "An unexpected error occurred."
 
 
+@app.get("/choose_profile_pic", response_class=HTMLResponse)
+async def choose_profile_pic(request: Request, user: str):
+    return templates.TemplateResponse("profpic.html", {"request": request, "user": user})
 
+@app.post("/upload_profile_pic")
+async def upload_profile_pic(user: str = Form(...), file: UploadFile = File(...)):
+    """
+    Uploads a user-selected profile picture.
+    """
+    user_obj = db.get_user(user)
+    if not user_obj:
+        return {"error": "User not found"}
+
+    profile_pic_data = await file.read()  # Read file as binary
+    db.update_user_profile_pic(user, profile_pic_data)
+
+    return RedirectResponse(f"/menu?user={user}", status_code=303)
+
+@app.post("/keep_default_profile_pic")
+async def keep_default_profile_pic(user: str = Form(...)):
+    """
+    Resets the user's profile picture to the default image.
+    """
+    user_obj = db.get_user(user)
+    if not user_obj:
+        return {"error": "User not found"}
+
+    # Set the profile picture to default (empty or predefined binary default)
+    db.update_user_profile_pic(user, None)
+
+    return RedirectResponse(f"/menu?user={user}", status_code=303)
 
 @app.get("/menu", response_class=HTMLResponse)
 async def menu(request: Request, user: str):
     user_data = db.get_user(user)
     if not user_data:
         return RedirectResponse("/login", status_code=303)
+
     projects = db.get_user_projects(user_data.username)
-    return templates.TemplateResponse("menu.html", {"request": request, "projects": projects, "user": user})
+    profile_pic = "/static/profile_pics/default.png"  # Default image
+
+    if user_data.profile_pic_data:
+        try:
+            # Convert binary image data to Base64
+            encoded_image = base64.b64encode(user_data.profile_pic_data).decode('utf-8')
+
+            # Determine MIME type (PNG, JPEG, etc.)
+            image_header = "image/png"  # Default type
+            if user_data.profile_pic_data[:2] == b'\xff\xd8':  # JPEG magic bytes
+                image_header = "image/jpeg"
+
+            profile_pic = f"data:{image_header};base64,{encoded_image}"
+            
+            # Debugging
+            print(f"Final Base64 image string: {profile_pic[:100]}...")
+
+        except Exception as e:
+            print("Error converting profile picture:", e)
+
+    return templates.TemplateResponse(
+        "menu.html",
+        {"request": request, "projects": projects, "user": user, "profile_pic": profile_pic}
+    )
+
+
+
 
 
 
@@ -251,5 +309,3 @@ async def logout():
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie("user")
     return response
-
-

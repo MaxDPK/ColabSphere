@@ -7,10 +7,13 @@ import transaction
 
 
 class User(Persistent):
-    def __init__(self, username, password):
+    def __init__(self, username, password, profile_pic=None):
         self.username = username
         self.password = password
+        self.profile_pic_data = profile_pic  # Store binary data for profile picture
         self.projects = []  # List of project codes
+
+        
 
 
 class Project(Persistent):
@@ -47,7 +50,24 @@ class Database:
         return True
 
     def get_user(self, username):
-        return self.root.users.get(username)
+        user = self.root.users.get(username)
+        if user and not hasattr(user, "profile_pic"):  # If user exists but profile_pic is missing
+            user.profile_pic = "/static/profile_pics/default.png"  # Assign default profile pic
+            user._p_changed = True  # Mark the user object as changed
+            transaction.commit()  # Save changes to the database
+        return user
+
+    
+    def update_user_profile_pic(self, username, profile_pic_data):
+        """Update the profile picture binary data for a user."""
+        user = self.get_user(username)
+        if user:
+            user.profile_pic_data = profile_pic_data  # Store binary data
+            user._p_changed = True  # Mark the user object as changed
+            transaction.commit()  # Save changes to the database
+            return True
+        return False
+
 
     def create_project(self, name, owner):
         if owner not in self.root.users:
