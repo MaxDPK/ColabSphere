@@ -2,64 +2,117 @@
 <html lang="en">
 <head>
     <title>Menu</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            margin-top: 50px;
-        }
-        .profile-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .profile-container img {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            border: 2px solid black;
-            object-fit: cover;
-        }
-    </style>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    <link href='https://fonts.googleapis.com/css?family=Lalezar' rel='stylesheet'>
+    <link href='https://fonts.googleapis.com/css?family=Albert Sans' rel='stylesheet'>
+    <link rel="stylesheet" href="./static/menu.css">
 </head>
 <body>
 
-    <h1>Welcome, {{ user }}</h1>
-
-    <!-- Profile Picture Display -->
-    <div class="profile-container">
-        <img src="{{ profile_pic | safe }}" alt="Profile Picture">
-        <p>Profile Picture</p>
+    <!-- Left Sidebar -->
+    <div class="sidebar">
+        <img src="{{ profile_pic | safe }}" alt="Profile Picture" class="profile-pic">
+        <a href="/logout" class="logout-btn">⮐</a>
     </div>
 
-    <h2>Your Projects</h2>
-    <ul>
+    <!-- Main Content -->
+    <div class="projects-container">
+        <h1>Projects</h1>
         {% for project in projects %}
-            <li><a href="/project_hub/{{ project.code }}?user={{ user }}">{{ project.name }}</a></li>
+        <div class="project-card" onclick="window.location.href='/project_hub/{{ project.code }}?user={{ user }}'">
+                <span class="project-title">{{ project.name }}</span>
+                <div class="member-list">
+                    {% for member in project.members %}
+                        <img src="{{ member.profile_pic | safe }}" alt="{{ member.username }}" class="member-pic">
+                    {% endfor %}
+                </div>
+                
+                <span class="project-options">...</span>
+            </div>
         {% endfor %}
-    </ul>
-
-    <h3>Create a New Project</h3>
-    <form method="POST" action="/create_project">
-        <input type="hidden" name="user" value="{{ user }}">
-        <label>Project Name:</label>
-        <input type="text" name="project_name" required>
-        <button type="submit">Create Project</button>
-    </form>
-
-    <h3>Join a Project</h3>
-    <form method="POST" action="/join_project">
-        <label>Project Code:</label>
-        <input type="text" name="project_code" required>
-        <button type="submit">Join Project</button>
-    </form>
-
-    <br>
-    <a href="/logout">Logout</a>
-
+    </div>
     
+
+
+
+
+    <!-- Right Sidebar (Calendar & Actions) -->
+    <div class="right-sidebar">
+        <div class="calendar">
+            <h2>Mon, Aug 17</h2>
+            
+            <div class="month-selector">
+                <span>&lt;</span> <!-- Left Arrow -->
+                <span>August 2025</span>
+                <span>&gt;</span> <!-- Right Arrow -->
+            </div>
+        
+            <div class="days">
+                <div class="day">S</div>
+                <div class="day">M</div>
+                <div class="day">T</div>
+                <div class="day">W</div>
+                <div class="day">T</div>
+                <div class="day">F</div>
+                <div class="day">S</div>
+                {% for i in range(1, 32) %}
+                    {% if i == 17 %}
+                        <div class="day today">{{ i }}</div>
+                    {% else %}
+                        <div class="day">{{ i }}</div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        
+
+        <button class="action-btn" id="joinProject">Join project</button>
+        <button class="action-btn" id="openModal">+ Create project</button>
+    </div>
+
+    <!-- Modals -->
+    <div class="overlay" id="overlay"></div>
+    <div class="modal" id="modal">
+        <h2>Create New Project</h2>
+        <form method="POST" action="/create_project">
+            <input type="text" name="project_name" placeholder="Enter project name" required>
+            <button type="submit">Create</button>
+        </form>
+    </div>
+
+    <div class="modal join-modal" id="joinModal">
+        <h2>Join Project</h2>
+        <form method="POST" action="/join_project">
+            <input type="text" name="project_code" placeholder="Enter project code" required>
+            <button type="submit">Join</button>
+        </form>
+    </div>
+
+    <py-script>
+        from js import document
+        from pyodide.ffi import create_proxy
+
+        def open_modal(event):
+            """Opens the create project modal."""
+            document.getElementById("modal").style.display = "block"
+            document.getElementById("overlay").style.display = "block"
+
+        def open_join_modal(event):
+            """Opens the join project modal."""
+            document.getElementById("joinModal").style.display = "block"
+            document.getElementById("overlay").style.display = "block"
+
+        def close_modal(event):
+            """Closes all modals."""
+            document.getElementById("modal").style.display = "none"
+            document.getElementById("joinModal").style.display = "none"
+            document.getElementById("overlay").style.display = "none"
+
+        document.getElementById("openModal").addEventListener("click", create_proxy(open_modal))
+        document.getElementById("joinProject").addEventListener("click", create_proxy(open_join_modal))
+        document.getElementById("overlay").addEventListener("click", create_proxy(close_modal))
+    </py-script>
 
 </body>
 </html>

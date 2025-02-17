@@ -62,27 +62,28 @@ async def signup_page(request: Request):
 async def signup(request: Request, username: str = Form(...), password: str = Form(...), confirm_password: str = Form(...)):
     # Check if password and confirm password match
     if password != confirm_password:
-        # Show user-friendly error message and stay on the same page
         return templates.TemplateResponse("signup.html", {
             "request": request,
             "signup": True,
-            "error_message": "Passwords do not match. Please try again."  # Pass the error message to the template
+            "error_message": "Passwords do not match. Please try again."
         })
     
     # Check if the user already exists
     if db.get_user(username):
-        # Show user-friendly error message for existing username
         return templates.TemplateResponse("signup.html", {
             "request": request,
             "signup": True,
-            "error_message": "User already exists. Please try a different username."  # Pass the error message to the template
+            "error_message": "User already exists. Please try a different username."
         })
     
     # Proceed with adding the user if passwords match and username is available
     if db.add_user(username, password):
-        return RedirectResponse(f"/choose_profile_pic?user={username}", status_code=303)
+        response = RedirectResponse(f"/choose_profile_pic?user={username}", status_code=303)
+        response.set_cookie(key="user", value=username)  # ✅ Set user cookie after signup
+        return response
     
     return "An unexpected error occurred."
+
 
 
 @app.get("/choose_profile_pic", response_class=HTMLResponse)
