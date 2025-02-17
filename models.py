@@ -4,7 +4,7 @@ from persistent.mapping import PersistentMapping
 from ZODB import DB
 from ZODB.FileStorage import FileStorage
 import transaction
-
+import base64
 
 class User(Persistent):
     def __init__(self, username, password, profile_pic=None):
@@ -51,11 +51,14 @@ class Database:
 
     def get_user(self, username):
         user = self.root.users.get(username)
-        if user and not hasattr(user, "profile_pic"):  # If user exists but profile_pic is missing
-            user.profile_pic = "/static/profile_pics/default.png"  # Assign default profile pic
-            user._p_changed = True  # Mark the user object as changed
-            transaction.commit()  # Save changes to the database
+        if user:
+            # Ensure `profile_pic_data` exists for old users
+            if not hasattr(user, "profile_pic_data"):  
+                user.profile_pic_data = None  # Default to None
+                user._p_changed = True  # Mark the object as changed
+                transaction.commit()
         return user
+
 
     
     def update_user_profile_pic(self, username, profile_pic_data):
@@ -87,7 +90,33 @@ class Database:
         user = self.get_user(username)
         if not user:
             return []
-        return [self.get_project(code) for code in user.projects if code in self.root.projects]
+        
+        projects = []
+        for code in user.projects:
+            project = self.get_project(code)
+            if project:
+                # Get members and their profile pictures
+                members_info = []
+                for member in project.members:
+                    member_obj = self.get_user(member)
+                    if member_obj:
+                        profile_pic = "/static/profile_pics/default.png"  # Default profile pic
+                        if member_obj.profile_pic_data:
+                            encoded_image = base64.b64encode(member_obj.profile_pic_data).decode("utf-8")
+                            image_header = "image/png"
+                            if member_obj.profile_pic_data[:2] == b'\xff\xd8':
+                                image_header = "image/jpeg"
+                            profile_pic = f"data:{image_header};base64,{encoded_image}"
+                        
+                        members_info.append({"username": member, "profile_pic": profile_pic})
+                
+                projects.append({
+                    "name": project.name,
+                    "code": project.code,
+                    "members": members_info
+                })
+        return projects
+
 
     def add_user_to_project(self, username, project_code):
         user = self.get_user(username)
