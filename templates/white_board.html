@@ -181,12 +181,11 @@ def handle_message(event):
             ctx.moveTo(data["x"], data["y"])
         return  # Return early to prevent drawing a line to (0,0)
 
-        # Continue processing normal drawing with dynamic width
-        ctx.strokeStyle = data["color"]
-        ctx.lineWidth = data.get("lineWidth", 2.5)  # ✅ Use provided lineWidth or default to 2.5
-        ctx.globalAlpha = 1
-        ctx.lineTo(data["x"], data["y"])
-        ctx.stroke()
+    ctx.strokeStyle = data["color"]
+    ctx.lineWidth = data.get("lineWidth", 2.5)  
+    ctx.globalAlpha = 1
+    ctx.lineTo(data["x"], data["y"])
+    ctx.stroke()
         
 
 
