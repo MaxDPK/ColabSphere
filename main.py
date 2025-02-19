@@ -8,6 +8,7 @@ import shutil
 import os
 from io import BytesIO
 import base64
+import json
 
 app = FastAPI()
 
@@ -310,3 +311,64 @@ async def logout():
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie("user")
     return response
+
+
+
+
+WHITEBOARD_DIR = "whiteboards"
+os.makedirs(WHITEBOARD_DIR, exist_ok=True)
+
+def get_whiteboard_path(project_code: str) -> str:
+    """Return the file path for a project's whiteboard."""
+    return os.path.join(WHITEBOARD_DIR, f"{project_code}_whiteboard.json")
+
+def load_project_whiteboard(project_code: str) -> List[Dict]:
+    try:
+        with open(get_whiteboard_path(project_code), "r") as file:
+            return json.load(file)
+    except FileNotFoundError:
+        return []
+
+def save_project_whiteboard(project_code: str, data: List[Dict]):
+    with open(get_whiteboard_path(project_code), "w") as file:
+        json.dump(data, file)
+
+@app.get("/project_whiteboard/{project_code}", response_class=HTMLResponse)
+async def project_whiteboard(request: Request, project_code: str, user: str):
+    """Serve the whiteboard page for a specific project."""
+    return templates.TemplateResponse("white_board.html", {
+        "request": request,
+        "project_code": project_code,
+        "user": user
+    })
+
+@app.websocket("/ws/whiteboard/{project_code}")
+async def websocket_whiteboard(websocket: WebSocket, project_code: str):
+    await websocket.accept()
+    if project_code not in project_connections:
+        project_connections[project_code] = []
+    project_connections[project_code].append(websocket)
+
+    # Load existing whiteboard data
+    drawing_history = load_project_whiteboard(project_code)
+    for stroke in drawing_history:
+        await websocket.send_text(json.dumps(stroke))
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+
+            if message.get("action") == "clear":
+                drawing_history.clear()
+                save_project_whiteboard(project_code, drawing_history)
+            else:
+                drawing_history.append(message)
+                save_project_whiteboard(project_code, drawing_history)
+
+            # Broadcast update to all clients
+            for conn in project_connections[project_code]:
+                await conn.send_text(data)
+
+    except WebSocketDisconnect:
+        project_connections[project_code].remove(websocket)
