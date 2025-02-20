@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query, Form, Depends, Body, UploadFile, File
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query, Form, Depends, Body, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
@@ -190,6 +190,10 @@ async def project_hub(request: Request, project_code: str, user: str):
     if user not in project.members:
         return "You are not a member of this project"
     
+    if not any(chat.chat_id == "general1" for chat in project.chats):
+        project.create_general_chat()
+
+    
     return templates.TemplateResponse("project_hub.html", {
         "request": request,
         "project": project,
@@ -213,6 +217,8 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
         online_users[project_code] = set()
     online_users[project_code].add(user)
 
+    print(f"🟢 {user} is now ONLINE in project {project_code}")
+
     # Notify all connected clients about the updated online users
     await notify_project_users(project_code)
 
@@ -221,6 +227,7 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
+        print(f"🔴 {user} went OFFLINE in project {project_code}")
         # Handle WebSocket disconnection
         project_connections[project_code].remove(websocket)
         online_users[project_code].remove(user)
@@ -372,3 +379,108 @@ async def websocket_whiteboard(websocket: WebSocket, project_code: str):
 
     except WebSocketDisconnect:
         project_connections[project_code].remove(websocket)
+
+
+
+
+@app.get("/chat/{chat_id}", response_class=HTMLResponse)
+async def chat_page(request: Request, chat_id: str, user: str, project_code: str = Query(None)):
+    """Serve chat UI ensuring project_code is passed."""
+    
+    print(f"📩 Received request: chat_id={chat_id}, user={user}, project_code={project_code}")
+
+    # Ensure project_code is provided
+    if not project_code:
+        raise HTTPException(status_code=400, detail="Project code is missing from the request.")
+
+    project = db.get_project(project_code)
+    if not project:
+        return "Error: Project not found"
+
+    # Ensure "general1" chat exists
+    if chat_id == "general1" and not any(chat.chat_id == "general1" for chat in project.chats):
+        project.create_general_chat()
+
+    chat = project.get_chat(chat_id)
+    if not chat:
+        return "Error: Chat not found"
+
+    if user not in chat.participants:
+        return "Error: You are not a participant in this chat"
+    
+    # ✅ Pass project_code correctly
+    return templates.TemplateResponse("chat.html", {
+        "request": request,
+        "chat": chat,
+        "user": user,
+        "project_code": project_code
+    })
+
+@app.websocket("/ws/chat/{chat_id}")
+async def chat_websocket(websocket: WebSocket, chat_id: str):
+    """Handle WebSocket chat messages and send chat history on connection."""
+    
+    await websocket.accept()
+    
+    query_params = websocket.query_params
+    user = query_params.get("user")
+    project_code = query_params.get("project_code")
+
+    print(f"✅ WebSocket connected: chat_id={chat_id}, user={user}, project_code={project_code}")
+
+    if not project_code:
+        print("❌ ERROR: Project code is missing, closing WebSocket.")
+        await websocket.send_json({"error": "Project code is missing"})
+        await websocket.close()
+        return
+
+    # ✅ Fetch project and chat
+    project = db.get_project(project_code)
+    if not project:
+        print(f"❌ ERROR: Project {project_code} not found. Closing WebSocket.")
+        await websocket.send_json({"error": "Project not found"})
+        await websocket.close()
+        return
+
+    chat = project.get_chat(chat_id)
+    if not chat:
+        print(f"❌ ERROR: Chat {chat_id} not found in project {project_code}. Closing WebSocket.")
+        await websocket.send_json({"error": "Chat not found"})
+        await websocket.close()
+        return
+
+    # ✅ Ensure user is a participant
+    if user not in chat.participants:
+        print(f"❌ ERROR: User {user} is not a participant in chat {chat_id}. Closing WebSocket.")
+        await websocket.send_json({"error": "You are not a participant in this chat"})
+        await websocket.close()
+        return
+
+    print(f"🎉 SUCCESS: WebSocket connected for chat {chat_id}")
+
+    # ✅ Convert old messages if necessary and send chat history
+    chat_history = chat.get_history()
+    await websocket.send_json({"action": "history", "messages": chat_history})
+
+    # ✅ Track connected users
+    if chat_id not in project_connections:
+        project_connections[chat_id] = []
+    project_connections[chat_id].append(websocket)
+
+    try:
+        while True:
+            message = await websocket.receive_text()
+            print(f"📩 Received message: {message}")
+
+            # ✅ Store the message in chat history
+            chat.add_message(user, message)
+
+            # ✅ Broadcast message to all clients in the chat
+            for conn in project_connections[chat_id]:
+                clean_message = message.replace(f"{user}: ", "", 1) if message.startswith(f"{user}: ") else message
+
+                await conn.send_json({"action": "new_message", "user": user, "message": clean_message})
+
+    except WebSocketDisconnect:
+        print(f"❌ WebSocket disconnected for {user} in chat {chat_id}")
+        project_connections[chat_id].remove(websocket)

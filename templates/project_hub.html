@@ -8,6 +8,7 @@
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
 </head>
 <body>
+
     <h1>Project: {{ project.name }}</h1>
 
     <h2>Team Members</h2>
@@ -20,10 +21,22 @@
     </ul>
 
     <a href="/project_whiteboard/{{ project.code }}?user={{ user }}">Go to Whiteboard</a>
-
     <a href="/gantt_chart?project_code={{ project.code }}&user={{ user }}">Go to Gantt Chart</a>
-
     <a href="/menu?user={{ user }}">Back to Menu</a>
+
+    <h2>Chats</h2>
+    <ul id="chat-list">
+        <li class="chat-item" data-chat-id="general1">
+            <button class="chat-button" data-chat-id="general1">Open General Chat</button>
+        </li>
+        {% for chat in project.chats if chat.chat_id != "general1" %}
+            <li class="chat-item" data-chat-id="{{ chat.chat_id }}">
+                <button class="chat-button" data-chat-id="{{ chat.chat_id }}">
+                    Chat with {{ chat.participants | join(', ') }}
+                </button>
+            </li>
+        {% endfor %}
+    </ul>
 
     <!-- PyScript Code -->
     <py-script>
@@ -53,7 +66,6 @@
 
             def on_message(self, event):
                 """Handle WebSocket messages."""
-                # Parse the incoming message and convert it to a Python dictionary
                 js_data = window.JSON.parse(event.data)
                 data = dict(js_data.to_py())
 
@@ -62,11 +74,11 @@
 
             def on_close(self, event):
                 """Handle WebSocket disconnection."""
-                console.log("WebSocket closed. Reconnecting...")
+                console.log("❌ WebSocket closed. Reconnecting...")
                 setTimeout(lambda: asyncio.ensure_future(self.connect_websocket()), 1000)
 
             def update_online_status(self, online_users):
-                """Update the DOM to reflect the online/offline status of members."""
+                """Update the DOM to reflect online/offline status."""
                 members_list = document.querySelectorAll(".member")
                 for member in members_list:
                     member_username = member.getAttribute("data-username")
@@ -78,11 +90,31 @@
                         status_element.textContent = "Offline"
                         status_element.style.color = "red"
 
-        # Initialize the ProjectHub class and connect WebSocket
+        # ✅ Ensure project_code is extracted correctly
         project_code = "{{ project.code }}"
-        username = window.location.search.split("user=")[-1]
+        username = "{{ user }}"
+
+        # ✅ Initialize WebSocket connection
         hub = ProjectHub(project_code, username)
         asyncio.ensure_future(hub.connect_websocket())
+
+        # ✅ Chat Button Handling
+        def open_chat(event):
+            """Redirect to chat page with the correct project_code."""
+            chat_id = event.target.getAttribute("data-chat-id")
+            if not chat_id:
+                console.warn("⚠️ Chat ID not found in clicked element!")
+                return
+
+            url = f"/chat/{chat_id}?user={username}&project_code={project_code}"
+            console.log(f"🔄 Redirecting to: {url}")
+            window.location.href = url
+
+        # ✅ Attach event listeners to chat buttons
+        chat_buttons = document.querySelectorAll(".chat-button")
+        for button in chat_buttons:
+            button.addEventListener("click", create_proxy(open_chat))
+
     </py-script>
 </body>
 </html>
