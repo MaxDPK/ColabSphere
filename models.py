@@ -71,14 +71,20 @@ class Project(Persistent):
                 return chat
         return None
 
-    def create_chat(self, participants: List[str]):
-        """Create a new chat between participants."""
-        chat_id = str(uuid.uuid4())[:8]
-        chat = Chat(chat_id, participants)
+    def create_chat(self, chat_name: str, participants: List[str]):
+        """
+        Create a new chat with a user-defined name and selected participants.
+        """
+        if not participants:
+            participants = self.members  # ✅ Default to all project members if none selected
+
+        chat_id = chat_name
+        chat = Chat(chat_id, participants)  # ✅ Assign selected participants
         self.chats.append(chat)
         self._p_changed = True
         transaction.commit()
         return chat
+
 
 
 # --------- DATABASE CLASS ---------
