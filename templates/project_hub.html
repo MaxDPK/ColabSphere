@@ -2,83 +2,310 @@
 <html lang="en">
 <head>
     <title>Project Hub</title>
-    <!-- PyScript CSS -->
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
-    <!-- PyScript Core -->
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    <style>
+        body {
+            display: flex;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        .sidebar {
+            width: 200px;
+            background: #dec5a3;
+            padding: 20px;
+            height: 100vh;
+        }
+        .main-content {
+            flex-grow: 1;
+            padding: 20px;
+            background: #e6d6c1;
+        }
+        h2 {
+            font-size: 18px;
+            color: #354d2f;
+        }
+        .channel-section, .direct-message-section {
+            margin-bottom: 20px;
+        }
+        .channel-section button {
+            display: block;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+            padding: 5px;
+            text-align: left;
+            width: 100%;
+        }
+        .add-channel {
+            display: block;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+            padding: 5px;
+            text-align: left;
+            width: 100%;
+            margin-top: 10px;
+        }
+        .channel-section button:hover, .add-channel:hover {
+            background-color: #D9B08C;
+        }
+        .channel-section button:not(.add-channel)::before {
+            content: "# ";
+        }
+
+                /* === MODAL OVERLAY (BACKGROUND) === */
+        .overlay {
+            display: none;  /* Hidden by default */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5); /* Dark background overlay */
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+            z-index: 1001; /* Ensure modal appears above overlay */
+            text-align: center;
+            width: 300px;
+            max-width: 90%;
+        }
+
+
+        /* === MODAL BOX === */
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+            z-index: 1001; /* Ensure modal appears above overlay */
+            text-align: center;
+            width: 300px;
+            max-width: 90%;
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* === MODAL HEADER === */
+        .modal-content h2 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #333;
+        }
+
+        /* === MODAL INPUT FIELD === */
+        .modal-content input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        /* === BUTTON CONTAINER INSIDE MODAL === */
+        .modal-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+        }
+
+        /* === MODAL BUTTONS === */
+        .modal-buttons button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        /* Green Confirm Button */
+        .modal-buttons button:first-child {
+            background: #4CAF50;
+            color: white;
+        }
+
+        /* Red Cancel Button */
+        .modal-buttons button:last-child {
+            background: #f44336;
+            color: white;
+        }
+
+        /* === DROPDOWN MENU FOR RIGHT-CLICK OPTIONS === */
+        .dropdown-menu {
+            position: absolute;
+            background: white;
+            border: 1px solid #ccc;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+            padding: 5px;
+            z-index: 1000;
+            display: none;
+        }
+
+        .dropdown-menu ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .dropdown-menu li {
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+
+        .dropdown-menu li:hover {
+            background: #f0f0f0;
+        }
+
+
+    </style>
 </head>
 <body>
+    <div class="sidebar">
+        <h2>CHANNEL</h2>
+        <div id="loading-message">Loading channels...</div>  
+        <div class="channel-section" id="channel-list" style="display: none;">  
+            <button class="add-channel">+ Add channel</button>
+        </div> 
+        
+        <!-- Right-Click Dropdown Menu for Chat Management -->
+        <div id="chat-dropdown" class="dropdown-menu" style="display: none;">
+            <ul>
+                <li py-click="open_rename_modal">Rename Chat</li>
+                <li py-click="open_manage_members_modal">Manage Members</li>
+            </ul>
+        </div>
 
-    <h1>Project: {{ project.name }}</h1>
+        <h2>DIRECT MESSAGE</h2>
+        <div class="direct-message-section" id="direct-message-list">
+            <p>🧑‍💻 Sam</p>
+            <p>👨‍🏛️ John</p>
+            <p>🎨 Kattie</p>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <h1>Project: {{ project.name }}</h1>
+        <h2>Team Members</h2>
+        <ul id="members-list">
+            {% for member in members %}
+                <li class="member" data-username="{{ member }}">
+                    {{ member }} - <span class="status">Offline</span>
+                </li>
+            {% endfor %}
+        </ul>
+        <a href="/project_whiteboard/{{ project.code }}?user={{ user }}">Go to Whiteboard</a>
+        <a href="/gantt_chart?project_code={{ project.code }}&user={{ user }}">Go to Gantt Chart</a>
+        <a href="/menu?user={{ user }}">Back to Menu</a>
+    </div>
 
-    <h2>Team Members</h2>
-    <ul id="members-list">
-        {% for member in members %}
-            <li class="member" data-username="{{ member }}">
-                {{ member }} - <span class="status">Offline</span>
-            </li>
-        {% endfor %}
-    </ul>
+        <!-- Rename Chat Modal -->
+    <div class="overlay" id="renameModal">
+        <div class="modal-content">
+            <h2>Rename Chat</h2>
+            <input type="text" id="new-chat-name" placeholder="Enter new chat name">
+            <div class="modal-buttons">
+                <button py-click="rename_chat">Rename</button>
+                <button class="cancel-modal-btn" data-modal="renameModal">Cancel</button>
 
-    <a href="/project_whiteboard/{{ project.code }}?user={{ user }}">Go to Whiteboard</a>
-    <a href="/gantt_chart?project_code={{ project.code }}&user={{ user }}">Go to Gantt Chart</a>
-    <a href="/menu?user={{ user }}">Back to Menu</a>
+            </div>
+        </div>
+    </div>
 
-    <h2>Chats</h2>
-    <ul id="chat-list">
-        <li class="chat-item" data-chat-id="general1">
-            <button class="chat-button" data-chat-id="general1">Open General Chat</button>
-        </li>
-        {% for chat in project.chats if chat.chat_id != "general1" %}
-            <li class="chat-item" data-chat-id="{{ chat.chat_id }}">
-                <button class="chat-button" data-chat-id="{{ chat.chat_id }}">
-                    Chat with {{ chat.participants | join(', ') }}
-                </button>
-            </li>
-        {% endfor %}
-    </ul>
+    <div class="overlay" id="manageMembersModal">
+        <div class="modal-content">
+            <h2>Manage Chat Members</h2>
+            
+            <div id="member-list"></div> <!-- Members will be inserted here -->
+            <div class="modal-buttons">
+                <button py-click="update_chat_members">Save</button>
+                <button class="cancel-modal-btn" data-modal="manageMembersModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+    
+    
+    
 
-    <!-- PyScript Code -->
+
+    <!-- Overlay Modal for Adding Channel -->
+    <div class="overlay" id="overlay" style="display: none;"></div>
+    <div class="modal" id="channelModal" style="display: none;">
+        <h2>Create New Channel</h2>
+        
+        <!-- Channel Name Input -->
+        <input type="text" id="channel-name" placeholder="Enter channel name" required>
+
+        <!-- Member Selection -->
+        <h3>Select Members:</h3>
+        <div id="member-selection">
+            {% for member in members %}
+                <label>
+                    <input type="checkbox" class="member-checkbox" value="{{ member }}">
+                    {{ member }}
+                </label><br>
+            {% endfor %}
+        </div>
+
+        <div class="modal-buttons">
+            <button id="create-channel-btn">Create</button>
+            <button id="cancel-modal-btn">Cancel</button>
+        </div>
+    </div>
+
+
+
     <py-script>
         import asyncio
+        import json
         from js import document, WebSocket, setTimeout, console, window
         from pyodide.ffi import create_proxy
-
+        from pyodide.http import pyfetch
+        
         class ProjectHub:
             def __init__(self, project_code, username):
                 self.project_code = project_code
                 self.username = username
                 self.ws = None
-
+        
+                # Create persistent proxies for WebSocket event listeners
+                self.message_proxy = create_proxy(self.on_message)
+                self.close_proxy = create_proxy(self.on_close)
+        
             async def connect_websocket(self):
-                """Establish WebSocket connection and handle events."""
                 protocol = "wss" if window.location.protocol == "https:" else "ws"
                 ws_url = f"{protocol}://{window.location.host}/ws/{self.project_code}?user={self.username}"
                 self.ws = WebSocket.new(ws_url)
-
-                # Create proxies for event handlers
-                message_proxy = create_proxy(self.on_message)
-                close_proxy = create_proxy(self.on_close)
-
-                # Attach event listeners
-                self.ws.addEventListener("message", message_proxy)
-                self.ws.addEventListener("close", close_proxy)
-
+        
+                self.ws.addEventListener("message", self.message_proxy)
+                self.ws.addEventListener("close", self.close_proxy)
+        
             def on_message(self, event):
-                """Handle WebSocket messages."""
                 js_data = window.JSON.parse(event.data)
                 data = dict(js_data.to_py())
-
                 if data["action"] == "update":
                     self.update_online_status(data["online_users"])
-
+        
             def on_close(self, event):
-                """Handle WebSocket disconnection."""
-                console.log("❌ WebSocket closed. Reconnecting...")
+                console.log("\u274c WebSocket closed. Reconnecting...")
                 setTimeout(lambda: asyncio.ensure_future(self.connect_websocket()), 1000)
-
+        
             def update_online_status(self, online_users):
-                """Update the DOM to reflect online/offline status."""
                 members_list = document.querySelectorAll(".member")
                 for member in members_list:
                     member_username = member.getAttribute("data-username")
@@ -89,32 +316,385 @@
                     else:
                         status_element.textContent = "Offline"
                         status_element.style.color = "red"
-
-        # ✅ Ensure project_code is extracted correctly
+        
         project_code = "{{ project.code }}"
         username = "{{ user }}"
-
-        # ✅ Initialize WebSocket connection
         hub = ProjectHub(project_code, username)
         asyncio.ensure_future(hub.connect_websocket())
+        selected_chat_id = None  
+        
+        async def fetch_channels():
+            """
+            Fetches channels where the logged-in user is a participant.
+            """
+            try:
+                response = await pyfetch(f"/get_channels?project_code={{ project.code }}&user={{ user }}", method="GET")
+                data = await response.json()
 
-        # ✅ Chat Button Handling
-        def open_chat(event):
-            """Redirect to chat page with the correct project_code."""
-            chat_id = event.target.getAttribute("data-chat-id")
-            if not chat_id:
-                console.warn("⚠️ Chat ID not found in clicked element!")
+                if "channels" in data:
+                    channel_list = document.getElementById("channel-list")
+                    loading_message = document.getElementById("loading-message")
+
+                    # ✅ Find "+ Add Channel" button before clearing channels
+                    add_channel_button = document.querySelector(".add-channel")
+
+                    # ✅ Remove only chat buttons (keep + Add Channel)
+                    channel_list.innerHTML = ""  
+                    channel_list.appendChild(add_channel_button)  # ✅ Re-add the button
+
+                    # ✅ Add only chats the user is a member of
+                    for channel in data["channels"]:
+                        add_channel_to_ui(channel)
+
+                    # ✅ Hide loading message & show channels
+                    loading_message.style.display = "none"
+                    channel_list.style.display = "block"
+
+            except Exception as e:
+                console.log(f"Error fetching channels: {str(e)}")
+
+
+        
+        def add_channel_to_ui(channel_name):
+            """
+            Dynamically adds a chat button with right-click functionality.
+            """
+            new_button = document.createElement("button")
+            new_button.textContent = f" {channel_name}"
+            new_button.classList.add("chat-button")
+            new_button.dataset.chatId = channel_name
+            new_button.setAttribute("onclick", f"location.href='/chat/{channel_name}?user={{ user }}&project_code={{ project.code }}'")
+            
+            # ✅ Attach right-click event (PyScript)
+            new_button.addEventListener("contextmenu", create_proxy(lambda event: show_chat_dropdown(event, channel_name)))
+            
+            document.getElementById("channel-list").appendChild(new_button)   
+            
+        
+        
+        async def save_channel(channel_name):
+            """
+            Sends a request to save a newly created channel with selected members.
+            """
+            try:
+                # ✅ Get all selected members
+                member_checkboxes = document.querySelectorAll(".member-checkbox:checked")
+                selected_members = [checkbox.value for checkbox in member_checkboxes]
+        
+                # ✅ Ensure we have at least one member
+                if not selected_members:
+                    console.log("⚠️ Error: At least one member must be selected!")
+                    return
+                
+                form_data = json.dumps({
+                    "project_code": project_code, 
+                    "channel_name": channel_name,
+                    "members": selected_members  # ✅ Include selected members in request
+                })
+                
+                response = await pyfetch(
+                    "/add_channel", 
+                    method="POST", 
+                    body=form_data, 
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                data = await response.json()
+                console.log(data["message"])
+        
+                # Refresh the list of channels
+                await fetch_channels()
+            
+            except Exception as e:
+                console.log(f"Error saving channel: {str(e)}")
+    
+        def openModal(event=None):
+            """
+            Opens the Add Channel modal.
+            """
+            document.getElementById("overlay").style.display = "block"
+            document.getElementById("channelModal").style.display = "block"
+            
+        def closeModal(event=None):
+            """
+            Closes the Add Channel modal.
+            """
+            document.getElementById("overlay").style.display = "none"
+            document.getElementById("channelModal").style.display = "none"
+            
+        # Create persistent proxies for event handlers
+        openModal_proxy = create_proxy(openModal)
+        closeModal_proxy = create_proxy(closeModal)
+       
+        
+        async def addChannel(event=None):
+            """
+            Handles the creation of a new channel.
+            """
+            channel_name = document.getElementById("channel-name").value.strip()
+            if channel_name:
+                await save_channel(channel_name)
+            closeModal()
+        
+        addChannel_proxy = create_proxy(addChannel)
+        
+        def setup_event_listeners():
+            """
+            Sets up event listeners to avoid the borrowed proxy issue.
+            """
+            add_channel_button = document.querySelector(".add-channel")
+            create_channel_btn = document.getElementById("create-channel-btn")
+            cancel_modal_btn = document.getElementById("cancel-modal-btn")
+        
+            if add_channel_button:
+                add_channel_button.addEventListener("click", openModal_proxy)
+            if create_channel_btn:
+                create_channel_btn.addEventListener("click", addChannel_proxy)
+            if cancel_modal_btn:
+                cancel_modal_btn.addEventListener("click", closeModal_proxy)
+        
+        # Wait for DOM to load before setting up event listeners
+        setTimeout(create_proxy(setup_event_listeners), 100)
+        asyncio.ensure_future(fetch_channels())
+
+        
+        
+        def setup_modal_listeners():
+            """
+            Ensures Rename and Manage Members modals open when clicked.
+            """
+            dropdown_menu = document.getElementById("chat-dropdown")
+            
+            if not dropdown_menu:
+                console.log("❌ Dropdown menu not found!")
                 return
 
-            url = f"/chat/{chat_id}?user={username}&project_code={project_code}"
-            console.log(f"🔄 Redirecting to: {url}")
-            window.location.href = url
+            rename_btn = dropdown_menu.querySelector("li:nth-child(1)")  # Rename Chat
+            manage_members_btn = dropdown_menu.querySelector("li:nth-child(2)")  # Manage Members
 
-        # ✅ Attach event listeners to chat buttons
-        chat_buttons = document.querySelectorAll(".chat-button")
-        for button in chat_buttons:
-            button.addEventListener("click", create_proxy(open_chat))
+            if rename_btn:
+                rename_btn.addEventListener("click", create_proxy(open_rename_modal))
+                console.log("✅ Rename modal event attached!")
 
+            if manage_members_btn:
+                manage_members_btn.addEventListener("click", create_proxy(open_manage_members_modal))
+                console.log("✅ Manage members modal event attached!")
+
+        # Run the setup once the DOM loads
+        setTimeout(create_proxy(setup_modal_listeners), 100)
+
+
+        def show_chat_dropdown(event, chat_id):
+            """
+            Displays the dropdown menu when the user right-clicks on a chat.
+            """
+            global selected_chat_id
+            selected_chat_id = chat_id  # ✅ Store selected chat ID
+            event.preventDefault()  # Prevent default right-click menu
+
+            dropdown = document.getElementById("chat-dropdown")
+            dropdown.style.display = "block"
+            dropdown.style.left = f"{event.pageX}px"
+            dropdown.style.top = f"{event.pageY}px"
+
+            console.log(f"🟢 Chat dropdown opened for: {selected_chat_id}")
+
+            # Hide dropdown when clicking elsewhere
+            def hide_dropdown(evt):
+                dropdown.style.display = "none"
+                console.log("🔴 Dropdown closed.")
+
+            document.addEventListener("click", create_proxy(hide_dropdown), {"once": True})
+
+        def open_rename_modal(event=None):
+            """
+            Opens the rename chat modal and ensures it is visible.
+            """
+            global selected_chat_id
+            if not selected_chat_id:
+                console.log("❌ No chat selected!")
+                return
+        
+            console.log(f"🟢 Rename modal opened for chat: {selected_chat_id}")
+        
+            rename_modal = document.getElementById("renameModal")
+            overlay = document.getElementById("overlay")
+
+            rename_modal.style.display = "flex"
+            rename_modal.style.display = "block"
+            overlay.style.display = "block"  # ✅ Ensure overlay appears
+            rename_modal.style.zIndex = "1001"  # ✅ Bring modal to the front
+        
+        def open_manage_members_modal(event=None):
+            """
+            Opens the manage members modal and loads the current members.
+            """
+            global selected_chat_id
+            if not selected_chat_id:
+                console.log("❌ No chat selected!")
+                return
+        
+            console.log(f"🟢 Manage members modal opened for chat: {selected_chat_id}")
+        
+            manage_modal = document.getElementById("manageMembersModal")
+            overlay = document.getElementById("overlay")
+        
+            manage_modal.style.display = "flex"
+            overlay.style.display = "block"
+            manage_modal.style.zIndex = "1001"
+        
+            asyncio.ensure_future(fetch_chat_members())  # Fetch and display members
+        
+        def rename_chat(event=None):
+            if not selected_chat_id:
+                console.log("No chat selected!")
+                return
+
+            new_chat_name = document.getElementById("new-chat-name").value
+
+            async def send_rename_request():
+                response = await pyfetch("/rename_chat", method="POST", body=json.dumps({
+                    "project_code": "{{ project.code }}",
+                    "chat_id": selected_chat_id,
+                    "new_name": new_chat_name
+                }), headers={"Content-Type": "application/json"})
+
+                await response.json()
+                document.location.reload()
+
+            asyncio.ensure_future(send_rename_request())
+
+        def close_modal(event):
+            """
+            Closes the specified modal and hides the overlay.
+            """
+            button = event.target
+            modal_id = button.getAttribute("data-modal")  # Get modal ID from button data attribute
+        
+            if modal_id:
+                modal = document.getElementById(modal_id)
+                overlay = document.getElementById("overlay")
+        
+                if modal:
+                    modal.style.display = "none"
+                if overlay:
+                    overlay.style.display = "none"
+        
+                console.log(f"🔴 Modal {modal_id} closed.")
+        
+        
+        def attach_cancel_events():
+            """
+            Attaches event listeners to all cancel buttons.
+            """
+            cancel_buttons = document.querySelectorAll(".cancel-modal-btn")
+            
+            for btn in cancel_buttons:
+                btn.addEventListener("click", create_proxy(close_modal))
+            
+        setTimeout(create_proxy(attach_cancel_events), 100)
+            
+        
+        async def fetch_chat_members():
+            """
+            Fetches all project members and highlights members already in the selected chat.
+            """
+            global selected_chat_id
+            if not selected_chat_id:
+                console.log("❌ No chat selected!")
+                return
+            
+            try:
+                response = await pyfetch(f"/get_chat_members?project_code={project_code}&chat_id={selected_chat_id}", method="GET")
+                data = await response.json()
+        
+                member_list_div = document.getElementById("member-list")
+                member_list_div.innerHTML = ""  # ✅ Clear previous content to prevent duplicates
+        
+                # ✅ Ensure only one "Select All" option exists
+                select_all_checkbox = document.createElement("input")
+                select_all_checkbox.type = "checkbox"
+                select_all_checkbox.id = "select-all"
+                select_all_checkbox.addEventListener("change", create_proxy(select_all_members))
+                
+                label = document.createElement("label")
+                label.textContent = " Select All"
+                label.insertBefore(select_all_checkbox, label.firstChild)
+        
+                member_list_div.appendChild(label)
+                member_list_div.appendChild(document.createElement("br"))
+        
+                # ✅ Add each project member with checkboxes
+                for member_data in data["members"]:
+                    member = member_data["username"]
+                    is_member = member_data["is_member"]
+        
+                    checkbox = document.createElement("input")
+                    checkbox.type = "checkbox"
+                    checkbox.value = member
+                    checkbox.checked = is_member  # ✅ Pre-check if already in chat
+                    checkbox.classList.add("member-checkbox")
+        
+                    label = document.createElement("label")
+                    label.textContent = f" {member}"
+                    label.insertBefore(checkbox, label.firstChild)
+        
+                    member_list_div.appendChild(label)
+                    member_list_div.appendChild(document.createElement("br"))
+        
+            except Exception as e:
+                console.log(f"Error fetching chat members: {str(e)}")
+    
+
+
+
+        def select_all_members(event):
+            """
+            Toggles all checkboxes based on 'Select All' checkbox state.
+            """
+            is_checked = event.target.checked
+            checkboxes = document.querySelectorAll("#member-list input[type='checkbox']")
+            
+            for checkbox in checkboxes:
+                checkbox.checked = is_checked
+
+
+        async def update_chat_members(event=None):
+            """
+            Sends updated members list to the backend.
+            """
+            global selected_chat_id
+            if not selected_chat_id:
+                console.log("❌ No chat selected!")
+                return
+
+            selected_members = [checkbox.value for checkbox in document.querySelectorAll(".member-checkbox:checked")]
+
+            try:
+                response = await pyfetch("/update_chat_members", method="POST", body=json.dumps({
+                    "project_code": project_code,
+                    "chat_id": selected_chat_id,
+                    "members": selected_members
+                }), headers={"Content-Type": "application/json"})
+
+                data = await response.json()
+                console.log(data["message"])
+                
+                # Reload the page to reflect changes
+                document.location.reload()
+
+            except Exception as e:
+                console.log(f"Error updating chat members: {str(e)}")
+
+                    
+
+                
+        
     </py-script>
+        
+    
+    
+    
+    
 </body>
 </html>

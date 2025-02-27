@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, Query, Form, Depends, Body, UploadFile, File, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from models import User, Project, db
@@ -9,6 +9,9 @@ import os
 from io import BytesIO
 import base64
 import json
+from pydantic import BaseModel
+import transaction
+
 
 app = FastAPI()
 
@@ -207,33 +210,44 @@ async def project_hub(request: Request, project_code: str, user: str):
 async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str = Query(...)):
     await websocket.accept()
 
-    # Add the WebSocket to the project's connection list
+    # ✅ Ensure the project is in the dictionaries
     if project_code not in project_connections:
         project_connections[project_code] = []
-    project_connections[project_code].append(websocket)
-
-    # Add the user to the online list for the project
     if project_code not in online_users:
         online_users[project_code] = set()
+
+    # ✅ Add WebSocket & user
+    project_connections[project_code].append(websocket)
     online_users[project_code].add(user)
 
     print(f"🟢 {user} is now ONLINE in project {project_code}")
 
-    # Notify all connected clients about the updated online users
+    # ✅ Notify all clients about updated online users
     await notify_project_users(project_code)
 
     try:
-        # Keep the WebSocket connection alive
         while True:
-            await websocket.receive_text()
+            await websocket.receive_text()  # Keep connection open
     except WebSocketDisconnect:
         print(f"🔴 {user} went OFFLINE in project {project_code}")
-        # Handle WebSocket disconnection
-        project_connections[project_code].remove(websocket)
-        online_users[project_code].remove(user)
 
-        # Notify remaining clients about the updated online users
+        # ✅ SAFELY REMOVE WebSocket if it exists
+        if websocket in project_connections.get(project_code, []):
+            project_connections[project_code].remove(websocket)
+
+        # ✅ SAFELY REMOVE User if they exist
+        if user in online_users.get(project_code, set()):
+            online_users[project_code].remove(user)
+
+        # ✅ REMOVE EMPTY PROJECT LISTS to clean memory
+        if not project_connections[project_code]:
+            del project_connections[project_code]
+        if not online_users[project_code]:
+            del online_users[project_code]
+
+        # ✅ Notify remaining clients about updated online users
         await notify_project_users(project_code)
+
 
 
 async def notify_project_users(project_code: str):
@@ -385,36 +399,31 @@ async def websocket_whiteboard(websocket: WebSocket, project_code: str):
 
 @app.get("/chat/{chat_id}", response_class=HTMLResponse)
 async def chat_page(request: Request, chat_id: str, user: str, project_code: str = Query(None)):
-    """Serve chat UI ensuring project_code is passed."""
-    
-    print(f"📩 Received request: chat_id={chat_id}, user={user}, project_code={project_code}")
-
-    # Ensure project_code is provided
+    """
+    Serve chat UI ensuring only authorized members can access.
+    """
     if not project_code:
-        raise HTTPException(status_code=400, detail="Project code is missing from the request.")
+        raise HTTPException(status_code=400, detail="Project code is missing.")
 
     project = db.get_project(project_code)
     if not project:
         return "Error: Project not found"
 
-    # Ensure "general1" chat exists
-    if chat_id == "general1" and not any(chat.chat_id == "general1" for chat in project.chats):
-        project.create_general_chat()
-
     chat = project.get_chat(chat_id)
     if not chat:
         return "Error: Chat not found"
 
+    # ✅ Restrict access to only chat participants
     if user not in chat.participants:
         return "Error: You are not a participant in this chat"
-    
-    # ✅ Pass project_code correctly
+
     return templates.TemplateResponse("chat.html", {
         "request": request,
         "chat": chat,
         "user": user,
         "project_code": project_code
     })
+
 
 @app.websocket("/ws/chat/{chat_id}")
 async def chat_websocket(websocket: WebSocket, chat_id: str):
@@ -484,3 +493,113 @@ async def chat_websocket(websocket: WebSocket, chat_id: str):
     except WebSocketDisconnect:
         print(f"❌ WebSocket disconnected for {user} in chat {chat_id}")
         project_connections[chat_id].remove(websocket)
+
+
+# Pydantic model for request validation
+class ChannelRequest(BaseModel):
+    project_code: str
+    channel_name: str
+    members: List[str] 
+
+@app.post("/add_channel")
+async def add_channel(request: ChannelRequest):
+    """
+    Adds a new channel to the project with selected members.
+    """
+    project = db.get_project(request.project_code)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    # ✅ Check if the channel already exists
+    if request.channel_name in [chat.chat_id for chat in project.chats]:
+        return {"message": "Channel already exists"}
+
+    # ✅ Ensure at least one participant is selected
+    if not request.members:
+        raise HTTPException(status_code=400, detail="At least one member must be selected.")
+
+    # ✅ Create chat with selected members
+    new_chat = project.create_chat(request.channel_name, participants=request.members)
+
+    return {"message": "Channel added successfully", "chat_id": new_chat.chat_id}
+
+
+
+@app.get("/get_channels")
+async def get_channels(project_code: str, user: str):
+    """
+    Retrieves only the channels where the user is a participant.
+    """
+    project = db.get_project(project_code)
+    if not project:
+        return {"channels": []}  # Return an empty list if project not found
+
+    # ✅ Return only chats where the user is a participant
+    user_chats = [chat.chat_id for chat in project.chats if user in chat.participants]
+
+    return {"channels": user_chats}
+
+
+@app.post("/rename_chat")
+async def rename_chat(data: dict = Body(...)):
+    """
+    Renames an existing chat for all members in a project.
+    """
+    project = db.get_project(data["project_code"])
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    chat = project.get_chat(data["chat_id"])
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    chat.chat_id = data["new_name"]
+    chat._p_changed = True
+    transaction.commit()
+
+    return {"message": "Chat renamed successfully"}
+
+@app.get("/get_chat_members")
+async def get_chat_members(project_code: str, chat_id: str):
+    """
+    Fetches all project members and identifies those already in the selected chat.
+    """
+    project = db.get_project(project_code)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    chat = project.get_chat(chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    # Get all project members
+    all_members = project.members  # Fetch all members in the project
+
+    # Get current chat members
+    chat_members = set(chat.participants)  # Convert to set for fast lookup
+
+    # Format response
+    member_list = [{"username": member, "is_member": member in chat_members} for member in all_members]
+
+    return JSONResponse(content={"members": member_list})
+
+@app.post("/update_chat_members")
+async def update_chat_members(data: dict = Body(...)):
+    """
+    Updates the members of an existing chat, allowing users to be added or removed.
+    """
+    project = db.get_project(data["project_code"])
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    chat = project.get_chat(data["chat_id"])
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+
+    chat.participants = data["members"]
+    chat._p_changed = True
+    transaction.commit()
+
+    return {"message": "Chat members updated successfully"}
+
+
