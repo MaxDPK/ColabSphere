@@ -3,6 +3,14 @@
 <head>
     <title>Project Hub</title>
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <link href="https://fonts.googleapis.com/css2?family=Literata:wght@400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@200&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@100&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&display=swap" rel="stylesheet">
+
+
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
     <style>
         body {
@@ -10,6 +18,15 @@
             margin: 0;
             font-family: Arial, sans-serif;
         }
+        h1 {
+            font-family: "Amiri Quran", serif;  /* Alternative thin serif font */
+            font-weight: 300;  /* Very thin */
+            font-size: 48px;
+            color: #3B372E;
+            letter-spacing: 0.5px;
+        }
+
+
         .sidebar {
             width: 200px;
             background: #dec5a3;
@@ -172,6 +189,101 @@
             background: #f0f0f0;
         }
 
+        /* === Main Seating Area === */
+        .seating-container {
+            position: relative;
+            width: 600px;
+            height: 500px;
+            margin: 50px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* === Oval Table in the Center === */
+        .table {
+            width: 350px;
+            height: 200px;
+            background-color: #b88c5a;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        /* === Seats (Chairs) Styling === */
+        .seat {
+            width: 90px;
+            height: 120px;
+            background-image: url('/static/chair.png'); /* Use the chair image */
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* === Profile Picture on Chair === */
+        .profile-pic {
+            width: 50px; /* Circular effect */
+            height: 50px;
+            border-radius: 50%;
+            position: absolute;
+            top: 15px; /* Adjust so it sits on the chair */
+            left: 50%;
+            transform: translateX(-50%);
+            background-size: cover;
+            background-position: center;
+            border: 3px solid white; /* Optional */
+        }
+
+        /* === User Name under the Profile Picture === */
+        .member-name {
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            text-align: center;
+            position: absolute;
+            top: 80px;
+        }
+
+        /* === Online Status Indicator === */
+        .status-indicator {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: green;
+            border: 2px solid white;
+        }
+
+                /* Project Header - Aligns H1 and Button */
+        .project-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Triangle Button (▶) */
+        .toggle-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 20px;
+            transform: rotate(0deg);
+            transition: transform 0.3s ease;
+        }
+
+        /* Rotated Triangle when Open */
+        .toggle-btn.open {
+            transform: rotate(90deg);
+        }
 
     </style>
 </head>
@@ -200,15 +312,30 @@
     </div>
     
     <div class="main-content">
-        <h1>Project: {{ project.name }}</h1>
-        <h2>Team Members</h2>
-        <ul id="members-list">
-            {% for member in members %}
-                <li class="member" data-username="{{ member }}">
-                    {{ member }} - <span class="status">Offline</span>
-                </li>
-            {% endfor %}
-        </ul>
+        <div class="project-header">
+            <h1>Project: {{ project.name }}</h1>
+            <button class="toggle-btn" py-click="toggle_project_details">▶</button>
+        </div>
+        
+        <!-- Hidden project details initially -->
+        <div id="project-details" style="display: none;">
+            <h2>Project Code: {{ project.code }}</h2>
+            <h3>Team Members:</h3>
+            <ul id="member-list">
+                {% for member in members %}
+                    <li>{{ member }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        
+    
+        <div class="seating-container">
+            <div class="table"></div> <!-- The table -->
+            <div id="seating-area"></div> <!-- Seats will be dynamically added here -->
+        </div>
+        
+        
+    
         <a href="/project_whiteboard/{{ project.code }}?user={{ user }}">Go to Whiteboard</a>
         <a href="/gantt_chart?project_code={{ project.code }}&user={{ user }}">Go to Gantt Chart</a>
         <a href="/menu?user={{ user }}">Back to Menu</a>
@@ -276,6 +403,7 @@
         from js import document, WebSocket, setTimeout, console, window
         from pyodide.ffi import create_proxy
         from pyodide.http import pyfetch
+        import math
         
         class ProjectHub:
             def __init__(self, project_code, username):
@@ -299,23 +427,46 @@
                 js_data = window.JSON.parse(event.data)
                 data = dict(js_data.to_py())
                 if data["action"] == "update":
-                    self.update_online_status(data["online_users"])
+                    self.update_online_members(data["online_users"])
+            
         
             def on_close(self, event):
                 console.log("\u274c WebSocket closed. Reconnecting...")
                 setTimeout(lambda: asyncio.ensure_future(self.connect_websocket()), 1000)
         
-            def update_online_status(self, online_users):
-                members_list = document.querySelectorAll(".member")
-                for member in members_list:
-                    member_username = member.getAttribute("data-username")
-                    status_element = member.querySelector(".status")
-                    if member_username in online_users:
-                        status_element.textContent = "Online"
-                        status_element.style.color = "green"
-                    else:
-                        status_element.textContent = "Offline"
-                        status_element.style.color = "red"
+            def update_online_members(self, online_users):
+                seating_area = document.getElementById("seating-area")
+                seating_area.innerHTML = ""
+        
+                # Positions to arrange chairs around the table
+                num_seats = len(online_users)
+                radius = 170  # Distance from the center
+                table_center_x = 250
+                table_center_y = 220
+        
+                angle_step = 360 / max(num_seats, 1)  # Spread evenly around the table
+        
+                for i, (member, profile_pic_url) in enumerate(online_users.items()):
+                    angle = math.radians(i * angle_step)
+                    seat_x = table_center_x + radius * math.cos(angle)
+                    seat_y = table_center_y + radius * math.sin(angle)
+        
+                    seat = document.createElement("div")
+                    seat.classList.add("seat")
+                    seat.style.left = f"{seat_x}px"
+                    seat.style.top = f"{seat_y}px"
+        
+                    profile_pic = document.createElement("div")
+                    profile_pic.classList.add("profile-pic")
+                    profile_pic.style.backgroundImage = f"url('{profile_pic_url}')"
+        
+                    status_indicator = document.createElement("div")
+                    status_indicator.classList.add("status-indicator")
+        
+                    seat.appendChild(profile_pic)
+                    seat.appendChild(status_indicator)
+                    seating_area.appendChild(seat)
+            
         
         project_code = "{{ project.code }}"
         username = "{{ user }}"
@@ -686,15 +837,23 @@
             except Exception as e:
                 console.log(f"Error updating chat members: {str(e)}")
 
-                    
 
-                
+        def toggle_project_details(event=None):
+            """
+            Toggles the visibility of the project details section.
+            """
+            details_div = document.getElementById("project-details")
+            toggle_btn = document.querySelector(".toggle-btn")
+
+            if details_div.style.display == "none":
+                details_div.style.display = "block"
+                toggle_btn.classList.add("open")  # Rotate triangle
+            else:
+                details_div.style.display = "none"
+                toggle_btn.classList.remove("open")  # Reset rotation
+                        
         
     </py-script>
-        
-    
-    
-    
-    
+ 
 </body>
 </html>

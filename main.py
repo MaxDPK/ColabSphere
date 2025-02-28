@@ -251,17 +251,35 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
 
 
 async def notify_project_users(project_code: str):
-    """Send the updated online users list to all WebSocket clients in the project."""
+    """Send updated online users with profile pictures to WebSocket clients."""
     if project_code in project_connections:
+        online_users_with_pics = {}
+
+        for user in online_users.get(project_code, []):
+            user_data = db.get_user(user)
+            profile_pic = "/static/profile_pics/default.png"  # Default picture
+
+            if user_data and user_data.profile_pic_data:
+                try:
+                    encoded_image = base64.b64encode(user_data.profile_pic_data).decode("utf-8")
+                    image_header = "image/png"
+                    if user_data.profile_pic_data[:2] == b'\xff\xd8':  # JPEG check
+                        image_header = "image/jpeg"
+                    profile_pic = f"data:{image_header};base64,{encoded_image}"
+                except Exception as e:
+                    print(f"Error encoding profile picture for {user}: {e}")
+
+            online_users_with_pics[user] = profile_pic
+
         for connection in project_connections[project_code]:
             try:
                 await connection.send_json({
                     "action": "update",
-                    "online_users": list(online_users[project_code])
+                    "online_users": online_users_with_pics
                 })
             except Exception:
-                # If a WebSocket connection is closed unexpectedly, remove it
                 project_connections[project_code].remove(connection)
+
 
 
 @app.get("/gantt_chart", response_class=HTMLResponse)
