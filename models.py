@@ -88,7 +88,7 @@ class Database:
         project = self.get_project(project_code)
         if not project:
             return False, "Invalid project code"
-        
+            
 
         # Update the Gantt chart
         project.gantt_chart = activities

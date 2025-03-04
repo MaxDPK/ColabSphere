@@ -6,6 +6,120 @@
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
     <!-- PyScript Core -->
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    <style>
+    /* 🟢 Main Task Container */
+    .task-section {
+        width: 50%; /* ✅ Makes it smaller */
+        max-width: 600px; /* ✅ Limits max width */
+        margin: 20px auto; /* ✅ Centers the container */
+        padding: 15px;
+        background-color: #f0f0f0; /* ✅ Light grey background */
+        border-radius: 10px;
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* ✅ Soft shadow */
+    }
+
+    /* 🟢 Task List */
+    #assigned-tasks {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    #assigned-tasks li {
+        background: white; /* ✅ White background for each task */
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 8px;
+        box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    /* 🟢 Progress Bar Container */
+    .progress-container {
+        width: 100%;
+        height: 8px; /* ✅ Much smaller */
+        background-color: #ddd; /* ✅ Light grey */
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 5px;
+    }
+
+    /* 🟢 Progress Bar Container */
+    .progress-container {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        height: 8px; /* ✅ Small progress bar */
+        background-color: #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+        position: relative;
+        margin-top: 5px;
+    }
+
+    /* 🟢 Actual Progress Bar */
+    .progress-bar {
+        height: 100%;
+        width: 0%;
+        background-color: #4CAF50;
+        transition: width 0.3s ease-in-out;
+    }
+
+    /* 🟢 Progress Percentage (Right Aligned) */
+    .progress-text {
+        font-size: 12px;
+        margin-left: 8px;
+        white-space: nowrap;
+    }
+
+
+    /* 🟢 Buttons */
+    .task-buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 8px;
+    }
+
+    .start-work, .stop-work {
+        padding: 6px 10px;
+        border: none;
+        cursor: pointer;
+        border-radius: 4px;
+    }
+
+    .start-work {
+        background-color: #4CAF50;
+        color: white;
+    }
+
+    .stop-work {
+        background-color: #f44336;
+        color: white;
+    }
+
+    /* 🟢 Task Item */
+.task-item {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+}
+
+/* 🟢 Task Header - Contains Name and Predecessors */
+.task-header {
+    display: flex;
+    justify-content: space-between; /* ✅ Aligns name left, predecessor right */
+    align-items: center;
+}
+
+/* 🟢 Task Predecessors */
+.task-predecessors {
+    font-size: 14px;
+    color: gray;
+    font-weight: bold;
+    text-align: right;
+}
+
+</style>
+ 
 </head>
 <body>
     <h1>Project: {{ project.name }}</h1>
@@ -18,6 +132,79 @@
             </li>
         {% endfor %}
     </ul>
+ 
+    <div class="task-section">
+        <h2>My Assigned Tasks</h2>
+        <ul id="assigned-tasks">
+            {% set row_to_task = {} %}
+            {% for task in all_tasks %}  {# ✅ Use all_tasks instead of assigned_tasks #}
+                {% set _ = row_to_task.update({task["row_num"]: task["name"]}) %}
+            {% endfor %}
+        
+            {% for task in assigned_tasks %}
+                <li class="task-item">
+                    <div class="task-header">
+                        <strong>{{ task["name"] }}</strong>
+        
+                        {% if task.get("predecessor") %}
+                            {% set pred_names = [] %}
+                            {% for pred_row in task["predecessor"].split(";") %}
+                                {% if pred_row in row_to_task %}
+                                    {% set _ = pred_names.append(row_to_task[pred_row]) %}
+                                {% endif %}
+                            {% endfor %}
+                            <span class="task-predecessors">
+                                Predecessor: {{ pred_names | join(", ") }}
+                            </span>
+                        {% endif %}
+                    </div>
+        
+                    <!-- Progress Bar Container -->
+                    <div class="progress-container">
+                        <div id="progress-{{ task['name'].replace(' ', '-') }}" class="progress-bar"
+                            style="width: {{ (task.get('completed_seconds', 0) / (task.get('hours_to_complete', 1) * 3600)) * 100 }}%;"
+                            data-total-hours="{{ task['hours_to_complete'] }}"
+                            data-completed-seconds="{{ task.get('completed_seconds', 0) }}">
+                        </div>
+                        <span id="progress-text-{{ task['name'].replace(' ', '-') }}" class="progress-text">
+                            {{ ((task.get('completed_seconds', 0) / (task.get('hours_to_complete', 1) * 3600)) * 100) | round(1) }}%
+                        </span>
+                    </div>
+        
+                    {% if (task.get('completed_seconds', 0) / (task.get('hours_to_complete', 1) * 3600)) >= 1 %}
+                        <p class="completed-text">✅ Task Completed</p>
+                    {% else %}
+                        <div class="task-buttons">
+                            <button class="start-work"
+                                data-task-name="{{ task['name'] }}"
+                                data-assigned-to='{{ task["assigned_to"] | tojson | safe }}'>
+                                Start Work
+                            </button>
+        
+                            <button class="stop-work"
+                                data-task-name="{{ task['name'] }}"
+                                data-assigned-to='{{ task["assigned_to"] | tojson | safe }}'>
+                                Stop Work
+                            </button>
+        
+                            <button class="complete-task"
+                                data-task-name="{{ task['name'] }}"
+                                data-assigned-to='{{ task["assigned_to"] | tojson | safe }}'>
+                                Complete Task
+                            </button>
+                        </div>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+        
+        
+        
+    </div>
+    
+    
+
+
 
     <a href="/gantt_chart?project_code={{ project.code }}&user={{ user }}">Go to Gantt Chart</a>
 
@@ -26,61 +213,371 @@
     <!-- PyScript Code -->
     <py-script>
         import asyncio
-        from js import document, WebSocket, setTimeout, console, window
-        from pyodide.ffi import create_proxy
+        from js import document, WebSocket, setTimeout, console, window, setInterval, clearInterval
+        from pyodide.ffi import create_proxy, to_js
+        import js
+        import json
+        from pyodide.http import pyfetch
 
-        class ProjectHub:
-            def __init__(self, project_code, username):
-                self.project_code = project_code
-                self.username = username
-                self.ws = None
 
-            async def connect_websocket(self):
-                """Establish WebSocket connection and handle events."""
-                protocol = "wss" if window.location.protocol == "https:" else "ws"
-                ws_url = f"{protocol}://{window.location.host}/ws/{self.project_code}?user={self.username}"
-                self.ws = WebSocket.new(ws_url)
-
-                # Create proxies for event handlers
-                message_proxy = create_proxy(self.on_message)
-                close_proxy = create_proxy(self.on_close)
-
-                # Attach event listeners
-                self.ws.addEventListener("message", message_proxy)
-                self.ws.addEventListener("close", close_proxy)
-
-            def on_message(self, event):
-                """Handle WebSocket messages."""
-                # Parse the incoming message and convert it to a Python dictionary
-                js_data = window.JSON.parse(event.data)
-                data = dict(js_data.to_py())
-
-                if data["action"] == "update":
-                    self.update_online_status(data["online_users"])
-
-            def on_close(self, event):
-                """Handle WebSocket disconnection."""
-                console.log("WebSocket closed. Reconnecting...")
-                setTimeout(lambda: asyncio.ensure_future(self.connect_websocket()), 1000)
-
-            def update_online_status(self, online_users):
-                """Update the DOM to reflect the online/offline status of members."""
-                members_list = document.querySelectorAll(".member")
-                for member in members_list:
-                    member_username = member.getAttribute("data-username")
-                    status_element = member.querySelector(".status")
-                    if member_username in online_users:
-                        status_element.textContent = "Online"
-                        status_element.style.color = "green"
-                    else:
-                        status_element.textContent = "Offline"
-                        status_element.style.color = "red"
-
-        # Initialize the ProjectHub class and connect WebSocket
+        work_sessions = {}  # Track active work sessions
         project_code = "{{ project.code }}"
-        username = window.location.search.split("user=")[-1]
-        hub = ProjectHub(project_code, username)
-        asyncio.ensure_future(hub.connect_websocket())
+        username = "{{ user }}"
+        active_users_per_task = {}
+        ws = None
+
+        async def connect_websocket():
+            """Establish WebSocket connection and handle events."""
+            global ws  # Use global WebSocket variable
+            protocol = "wss" if window.location.protocol == "https:" else "ws"
+            ws_url = f"{protocol}://{window.location.host}/ws/{project_code}?user={username}"
+            ws = WebSocket.new(ws_url)
+
+            # Attach event listeners
+            ws.addEventListener("message", create_proxy(on_message))
+            ws.addEventListener("close", create_proxy(on_close))
+
+        def on_message(event):
+            """Handle WebSocket messages for updates."""
+            try:
+                data = json.loads(event.data)
+                console.log("WebSocket received:", data)
+
+                if data.get("action") == "update":
+                    update_online_status(data["online_users"])
+
+                elif data.get("action") == "update_progress":
+                    task_name = data.get("task_name")
+                    assigned_to = data.get("assigned_to")
+                    completed_seconds = data.get("completed_seconds")
+
+                    if task_name and assigned_to is not None:
+                        asyncio.ensure_future(update_task_progress(task_name, assigned_to, completed_seconds))
+                    else:
+                        console.error("⚠️ WebSocket update_progress missing task_name or assigned_to:", data)
+
+                elif data.get("action") == "start_work":
+                    task_name = data["task_name"]
+                    assigned_to = data["assigned_to"]
+
+                    # ✅ Sync active users from WebSocket update
+                    task_key = f"{task_name}-{','.join(assigned_to)}"
+                    active_users_per_task[task_key] = data.get("active_workers", 1)  # Sync from server
+
+                    console.log(f"🟢 {active_users_per_task[task_key]} users working on {task_name}.")
+
+
+                elif data.get("action") == "stop_work":
+                    task_name = data["task_name"]
+                    assigned_to = data["assigned_to"]
+                    final_completed_seconds = data["final_completed_seconds"]
+
+                    task_key = f"{task_name}-{','.join(assigned_to)}"
+                    if task_key in active_users_per_task:
+                        active_users_per_task[task_key] -= 1
+                        if active_users_per_task[task_key] <= 0:
+                            del active_users_per_task[task_key]
+
+                    # Ensure progress is updated
+                    asyncio.ensure_future(update_task_progress(task_name, assigned_to, final_completed_seconds))
+
+                    console.log(f"🔴 User stopped working on {task_name}. Active users: {active_users_per_task.get(task_key, 0)}")
+
+            except Exception as e:
+                console.error("Error processing WebSocket message:", str(e))
+
+        def on_close(event):
+            """Handle WebSocket disconnection and reconnect."""
+            console.log("WebSocket closed. Reconnecting...")
+            setTimeout(lambda: asyncio.ensure_future(connect_websocket()), 1000)
+        
+        def update_online_status(online_users):
+            """Update the DOM to reflect the online/offline status of members."""
+            members_list = document.querySelectorAll(".member")
+            for member in members_list:
+                member_username = member.getAttribute("data-username")
+                status_element = member.querySelector(".status")
+                if member_username in online_users:
+                    status_element.textContent = "Online"
+                    status_element.style.color = "green"
+                else:
+                    status_element.textContent = "Offline"
+                    status_element.style.color = "red"
+        
+
+        async def update_task_progress(task_name, assigned_to, completed_seconds=None):
+            """Update task progress and percentage display properly."""
+            try:
+                if completed_seconds is None:
+                    completed_seconds = 0
+                    console.warn(f"⚠️ Task {task_name} missing 'completed_seconds'. Defaulting to 0.")
+
+                # ✅ Send `completed_seconds` to backend
+                response = await pyfetch(
+                    "/update_task_progress",
+                    method="POST",
+                    headers={"Content-Type": "application/json"},
+                    body=json.dumps({
+                        "project_code": project_code,
+                        "task_name": task_name,
+                        "assigned_to": assigned_to,
+                        "completed_seconds": completed_seconds  # ✅ Use seconds
+                    })
+                )
+
+                if response.ok:
+                    data = await response.json()
+                    console.log(f"✅ Task '{task_name}' progress updated:", data)
+
+                    # ✅ Find progress bar
+                    progress_element = document.querySelector(f"#progress-{task_name.replace(' ', '-')}")
+                    percentage_text = document.querySelector(f"#progress-text-{task_name.replace(' ', '-')}")
+
+                    if not progress_element:
+                        console.warn(f"⚠️ Task '{task_name}' progress bar not found.")
+                        return
+
+                    # ✅ Get total hours from dataset
+                    total_hours = int(progress_element.dataset.totalHours)
+                    total_seconds = total_hours * 3600  # Convert hours to seconds
+
+                    # ✅ Calculate progress percentage safely
+                    progress_percentage = min(100, (completed_seconds / total_seconds) * 100)
+
+                    # ✅ Update UI values
+                    progress_element.style.width = f"{progress_percentage}%"
+                    percentage_text.textContent = f"{progress_percentage:.1f}%"  # ✅ Show 1 decimal place
+
+                    console.log(f"✅ UI updated successfully for task '{task_name}' ({progress_percentage:.1f}%)")
+
+                else:
+                    console.error(f"❌ Failed to update task progress: {await response.text()}")
+
+            except Exception as e:
+                console.error(f"🚨 Error updating task progress: {str(e)}")
+
+
+
+            
+        def startWork_proxy(event):
+            """Start work button click event handler."""
+            task_name = event.target.getAttribute("data-task-name")
+            assigned_to = json.loads(event.target.getAttribute("data-assigned-to"))  # Parse JSON
+            asyncio.ensure_future(startWork(task_name, assigned_to))  # ✅ Ensure async execution
+
+
+        def stopWork_proxy(event):
+            """Stop work button click event handler."""
+            task_name = event.target.getAttribute("data-task-name")
+            assigned_to = json.loads(event.target.getAttribute("data-assigned-to"))  # Parse JSON
+            stopWork(task_name, assigned_to)
+
+        async def fetch_latest_task_progress(project_code, task_name, assigned_to):
+            """Fetch the latest progress of the task before starting work."""
+            try:
+                response = await pyfetch(
+                    f"/get_task_progress?project_code={project_code}&task_name={task_name}&assigned_to={','.join(assigned_to)}",
+                    method="GET",
+                    headers={"Content-Type": "application/json"},
+                )
+
+                if response.ok:
+                    data = await response.json()
+                    return data
+                else:
+                    console.error(f"❌ Failed to fetch latest progress: {await response.text()}")
+                    return None
+
+            except Exception as e:
+                console.error(f"🚨 Error fetching latest task progress: {str(e)}")
+                return None
+
+        
+        async def startWork(task_name, assigned_to):
+            global work_sessions
+
+            # ✅ Ensure active users are tracked
+            if "active_users" not in work_sessions:
+                work_sessions["active_users"] = set()
+
+            # ✅ Prevent user from working on multiple tasks
+            if username in work_sessions["active_users"]:
+                window.alert("⚠️ You are already working on another task. Stop it first!")
+                return
+
+            task_element = document.querySelector(f".task-item:has([data-task-name='{task_name}'])")
+
+            # ✅ Create a lookup for tasks by name (using the already available `all_tasks` from Jinja)
+            task_lookup = {task["name"]: task for task in {{ all_tasks | tojson | safe }}}
+
+            # ✅ Check if this task has predecessors
+            predecessors_text = task_element.querySelector(".task-predecessors")
+            if predecessors_text:
+                predecessor_names = predecessors_text.textContent.replace("Predecessor: ", "").split(", ")
+
+                for pred_name in predecessor_names:
+                    pred_name = pred_name.strip()
+
+                    # ✅ Ensure we check all predecessors (even unassigned ones)
+                    if pred_name in task_lookup:
+                        pred_task = task_lookup[pred_name]
+                        pred_progress = (pred_task.get("completed_seconds", 0) / (pred_task.get("hours_to_complete", 1) * 3600)) * 100
+
+                        # ✅ If any predecessor is incomplete, block work from starting
+                        if pred_progress < 100:
+                            task_element.style.backgroundColor = "lightcoral"  # ✅ Change task color to light red
+                            window.alert(f"⚠️ Cannot start '{task_name}' because predecessor '{pred_name}' is not completed!")
+                            return  # 🚫 Stop task from starting
+
+            # ✅ Fetch latest progress before starting work
+            latest_progress = await fetch_latest_task_progress(project_code, task_name, assigned_to)
+
+            if latest_progress is None:
+                window.alert("❌ Failed to fetch the latest task progress. Try again later.")
+                return
+
+            latest_completed_seconds = latest_progress.get("completed_seconds", 0)
+
+            window.alert(f"✅ Started working on task '{task_name}' with {latest_completed_seconds}s completed.")
+
+            ws.send(json.dumps({
+                "action": "start_work",
+                "task_name": task_name,
+                "assigned_to": assigned_to,
+                "username": username
+            }))
+
+            def update_time():
+                """Increase the completed time based on active users working on the same task."""
+                num_active_workers = max(1, active_users_per_task.get(f"{task_name}-{','.join(assigned_to)}", 1))
+                work_sessions[f"{task_name}-{','.join(assigned_to)}"]["elapsed_time"] += num_active_workers
+                new_completed_seconds = work_sessions[f"{task_name}-{','.join(assigned_to)}"]["initial_completed"] + work_sessions[f"{task_name}-{','.join(assigned_to)}"]["elapsed_time"]
+
+                asyncio.ensure_future(update_task_progress(task_name, assigned_to, new_completed_seconds))
+
+            # ✅ Store `task_name`, `assigned_to`, and latest completed time
+            work_sessions[f"{task_name}-{','.join(assigned_to)}"] = {
+                "task_name": task_name,
+                "assigned_to": assigned_to,
+                "interval": setInterval(create_proxy(update_time), 1000),
+                "elapsed_time": 0,
+                "initial_completed": latest_completed_seconds  # ✅ Use the latest progress
+            }
+
+            work_sessions["active_users"].add(username)
+            console.log(f"✅ Work session started for {username} on '{task_name}' with {latest_completed_seconds}s completed.")
+
+
+
+                
+                
+        
+        def stopWork(task_name, assigned_to):
+            """Stop tracking time for a task, updating the number of active users."""
+            task_key = f"{task_name}-{','.join(assigned_to)}"  # Unique key
+        
+            if task_key in work_sessions:
+                if work_sessions[task_key]["interval"] is not None:
+                    clearInterval(work_sessions[task_key]["interval"])  # ✅ Stop the timer
+                    work_sessions[task_key]["interval"] = None  # Mark as stopped
+        
+                final_completed_seconds = work_sessions[task_key]["initial_completed"] + work_sessions[task_key]["elapsed_time"]
+                del work_sessions[task_key]  # Remove session
+        
+                ws.send(json.dumps({
+                    "action": "stop_work",
+                    "task_name": task_name,
+                    "assigned_to": assigned_to,
+                    "username": username,
+                    "final_completed_seconds": final_completed_seconds
+                }))
+        
+                # ✅ Remove user from active users
+                if "active_users" in work_sessions and username in work_sessions["active_users"]:
+                    work_sessions["active_users"].remove(username)
+        
+                # ✅ Send final update to backend
+                asyncio.ensure_future(update_task_progress(task_name, assigned_to, final_completed_seconds))
+        
+                window.alert(f"✅ Stopped working on task '{task_name}'.")
+            else:
+                window.alert("⚠️ You're not working on this task!")
+        
+
+        def completeTask_proxy(event):
+            """Mark the task as fully completed instantly."""
+            task_name = event.target.getAttribute("data-task-name")
+            assigned_to = json.loads(event.target.getAttribute("data-assigned-to"))  # Parse JSON
+            asyncio.ensure_future(completeTask(task_name, assigned_to))
+
+        async def completeTask(task_name, assigned_to):
+            """Instantly complete the task to 100% progress and remove buttons."""
+            task_key = f"{task_name}-{','.join(assigned_to)}"
+        
+            # ✅ Get the total seconds needed for 100% completion
+            progress_element = document.querySelector(f"#progress-{task_name.replace(' ', '-')}")
+            total_hours = int(progress_element.dataset.totalHours)
+            total_seconds = total_hours * 3600  # Convert hours to seconds
+        
+            console.log(f"✅ Instantly completing task '{task_name}' ({total_seconds}s).")
+        
+            # ✅ Send update to backend
+            response = await pyfetch(
+                "/update_task_progress",
+                method="POST",
+                headers={"Content-Type": "application/json"},
+                body=json.dumps({
+                    "project_code": project_code,
+                    "task_name": task_name,
+                    "assigned_to": assigned_to,
+                    "completed_seconds": total_seconds  # ✅ Set to full completion
+                })
+            )
+        
+            if response.ok:
+        
+                # ✅ Update UI immediately
+                progress_element.style.width = "100%"
+                document.querySelector(f"#progress-text-{task_name.replace(' ', '-')}").textContent = "100.0%"
+        
+                # ✅ Remove buttons and show "Task Completed ✅"
+                parent_li = progress_element.closest("li")
+                buttons_container = parent_li.querySelector(".task-buttons")
+                if buttons_container:
+                    buttons_container.remove()
+        
+                completed_text = document.createElement("p")
+                completed_text.className = "completed-text"
+                completed_text.textContent = "✅ Task Completed"
+                parent_li.appendChild(completed_text)
+        
+            else:
+                console.error(f"❌ Failed to complete task '{task_name}': {await response.text()}")
+        
+
+        
+        # ✅ Bind event listener for Complete Task buttons
+        for button in document.querySelectorAll(".complete-task"):
+            button.addEventListener("click", create_proxy(completeTask_proxy))
+
+
+        # ✅ Bind event listeners like in the Gantt Chart
+        for button in document.querySelectorAll(".start-work"):
+            button.addEventListener("click", create_proxy(startWork_proxy))
+
+        for button in document.querySelectorAll(".stop-work"):
+            button.addEventListener("click", create_proxy(stopWork_proxy))
+
+        asyncio.ensure_future(connect_websocket())  # Starts WebSocket
+
+
     </py-script>
+
+
+
+
+
+
+
 </body>
 </html>

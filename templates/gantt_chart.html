@@ -79,6 +79,7 @@
                         <th>Start Date</th>
                         <th>End Date</th>
                         <th>Actions</th>
+                        
                     </tr>
                 </thead>
                 <tbody>
@@ -186,6 +187,88 @@
                         return (latest_end_date + timedelta(days=1)).strftime("%Y-%m-%d")
                 
                     return project_start_date  # Default if predecessors are invalid
+
+                def calculate_critical_path():
+                    """Calculate the Critical Path using CPM while correctly handling parallel tasks."""
+                    global activities
+                    if not activities:
+                        return
+                
+                    # ✅ Step 1: Convert `days` to integer safely (default to 0 for milestones)
+                    for a in activities:
+                        a["days"] = int(a["days"]) if a.get("days") else 0  # Default milestones to 0
+                        a["early_start"] = 0
+                        a["early_finish"] = 0
+                        a["late_start"] = 0
+                        a["late_finish"] = 0
+                        a["is_critical"] = False  # Default to False
+                
+                    # ✅ Step 2: Compute Early Start (ES) and Early Finish (EF)
+                    for a in activities:
+                        es = 0  # Earliest start time
+                        pred_ids = a["predecessor"].split(";") if a["predecessor"] else []
+                        for pid in pred_ids:
+                            if pid.isdigit():
+                                idx = int(pid) - 1
+                                if 0 <= idx < len(activities):
+                                    pred_task = activities[idx]
+                                    pred_ef = pred_task.get("early_finish", 0)  # Default to 0 if missing
+                                    es = max(es, pred_ef)  # Take max EF of predecessors
+                        a["early_start"] = es
+                        a["early_finish"] = es + a["days"]  # ✅ If milestone (days=0), EF = ES
+                
+                    # ✅ Step 3: Determine total project duration (longest EF)
+                    project_duration = max(a["early_finish"] for a in activities)
+                
+                    # ✅ Step 4: Build a Successor Map
+                    successors_map = {i: [] for i in range(len(activities))}
+                    for i, a in enumerate(activities):
+                        preds = a["predecessor"].split(";") if a["predecessor"] else []
+                        for pid in preds:
+                            if pid.isdigit():
+                                idx = int(pid) - 1
+                                if 0 <= idx < len(activities):
+                                    successors_map[idx].append(i)
+                
+                    # ✅ Step 5: Compute Late Finish (LF) and Late Start (LS) in reverse order
+                    for i in reversed(range(len(activities))):
+                        a = activities[i]
+                        if not successors_map[i]:  # If no successors, LF = Project Duration
+                            a["late_finish"] = project_duration
+                        else:
+                            successor_ls = [activities[s]["late_start"] for s in successors_map[i]]
+                            a["late_finish"] = min(successor_ls) if successor_ls else a["early_finish"]
+                        a["late_start"] = a["late_finish"] - a["days"]  # ✅ If milestone (days=0), LS = LF
+                
+                    # ✅ Step 6: Identify **only the correct** Critical Path using Backtracking
+                    longest_path = []
+                    max_length = 0
+                
+                    def find_longest_path(task_index, path, path_length):
+                        """Recursive function to find the longest dependency chain."""
+                        nonlocal longest_path, max_length
+                        path.append(task_index)
+                        path_length += activities[task_index]["days"]
+                
+                        successors = successors_map[task_index]
+                        if not successors:  # End of a path
+                            if path_length > max_length:
+                                max_length = path_length
+                                longest_path = path[:]
+                        else:
+                            for s in successors:
+                                find_longest_path(s, path[:], path_length)
+                
+                    # Start from root tasks (tasks with no predecessors)
+                    for i, a in enumerate(activities):
+                        if not a["predecessor"]:
+                            find_longest_path(i, [], 0)
+                
+                    # ✅ Mark only the tasks in the longest path as critical
+                    for i in longest_path:
+                        activities[i]["is_critical"] = True
+                
+                
                 
                 def sort_activities_by_predecessor():
                     """Sort activities based on predecessors, ensuring no task/milestone is placed too early."""
@@ -215,7 +298,7 @@
                 
 
                 def draw_dependency_line(pred_activity, current_activity, pred_index, current_index):
-                    """Draw a dependency line for tasks and milestones with predecessors."""
+                    """Draw a dependency line for tasks and milestones with predecessors, highlighting critical paths."""
                     if not pred_activity:
                         return  # Don't draw if predecessor is missing
                 
@@ -235,23 +318,28 @@
                 
                     current_bar_left = int(current_activity["start_date_offset"]) * 20
                 
-                    # ✅ **Ensure valid dependency line positioning**
-                    if current_bar_left > pred_bar_left:
-                        # Horizontal line from predecessor to task
-                        horizontal_line = document.createElement("div")
-                        horizontal_line.classList.add("line", "line-horizontal")
-                        horizontal_line.style.top = f"{pred_bar_top + 10}px"
-                        horizontal_line.style.left = f"{pred_bar_left}px"
-                        horizontal_line.style.width = f"{current_bar_left - pred_bar_left}px"
-                        chart_div.appendChild(horizontal_line)
+                    # ✅ **Determine if the dependency is on the critical path**
+                    is_critical = pred_activity.get("is_critical", False) and current_activity.get("is_critical", False)
+                    line_color = "red" if is_critical else "black"  # Critical path in red, normal in black
                 
-                        # Vertical line to the current activity
-                        vertical_line = document.createElement("div")
-                        vertical_line.classList.add("line", "line-vertical")
-                        vertical_line.style.top = f"{pred_bar_top + 10}px"
-                        vertical_line.style.left = f"{current_bar_left}px"
-                        vertical_line.style.height = f"{current_bar_top - pred_bar_top}px"
-                        chart_div.appendChild(vertical_line)
+                    # ✅ **Draw Horizontal Line (Dependency)**
+                    horizontal_line = document.createElement("div")
+                    horizontal_line.classList.add("line", "line-horizontal")
+                    horizontal_line.style.top = f"{pred_bar_top + 10}px"
+                    horizontal_line.style.left = f"{pred_bar_left}px"
+                    horizontal_line.style.width = f"{current_bar_left - pred_bar_left}px"
+                    horizontal_line.style.backgroundColor = line_color  # Red if critical
+                    chart_div.appendChild(horizontal_line)
+                
+                    # ✅ **Draw Vertical Line (Drop-down to current activity)**
+                    vertical_line = document.createElement("div")
+                    vertical_line.classList.add("line", "line-vertical")
+                    vertical_line.style.top = f"{pred_bar_top + 10}px"
+                    vertical_line.style.left = f"{current_bar_left}px"
+                    vertical_line.style.height = f"{current_bar_top - pred_bar_top}px"
+                    vertical_line.style.backgroundColor = line_color  # Red if critical
+                    chart_div.appendChild(vertical_line)
+                
                 
                 async def load_activities():
                     """Fetch activities from the server, sort them correctly, and update the table and chart."""
@@ -264,77 +352,63 @@
                             data = await response.json()
                             global activities
                             activities = data.get("activities", [])
-
+                
                             table_body = document.querySelector("#activity-table tbody")
                             table_body.innerHTML = ""  # Clear existing rows
-
+                
                             # ✅ Ensure activities are sorted correctly before processing
                             activities = sort_activities_by_predecessor()
-
+                
                             for i, activity in enumerate(activities):
                                 row = document.createElement("tr")
-
+                
                                 # ✅ Convert `predecessor` into string format for consistency
                                 if isinstance(activity.get("predecessor"), list):
                                     activity["predecessor"] = ";".join(str(p) for p in activity["predecessor"])
-
+                
                                 is_milestone = not activity.get("days") and not activity.get("work_hours_per_day")
-
+                
                                 # ✅ Ensure valid start_date
                                 if not activity.get("start_date") or activity["start_date"] == "":
                                     activity["start_date"] = calculate_start_date(activity.get("predecessor"))
-
+                
                                 # ✅ Ensure valid end_date
                                 if not activity.get("end_date") or activity["end_date"] == "":
                                     if is_milestone:
                                         activity["end_date"] = activity["start_date"]
                                     else:
                                         activity["end_date"] = calculate_end_date(activity["start_date"], activity.get("days", "1"))
-
-                                # ✅ Ensure valid work_hours_per_day
-                                if not is_milestone and not activity.get("work_hours_per_day"):
-                                    existing_hours = [
-                                        int(a["work_hours_per_day"]) for a in activities if a.get("work_hours_per_day")
-                                    ]
-                                    activity["work_hours_per_day"] = str(
-                                        sum(existing_hours) // len(existing_hours) if existing_hours else 3
-                                    )
-
-                                # ✅ Ensure valid hours_to_complete
-                                if not is_milestone:
-                                    activity["hours_to_complete"] = str(
-                                        int(activity["work_hours_per_day"]) * int(activity["days"])
-                                    )
-
-                                # Add row number
+                
+                                # ✅ Add row number
                                 row_number_cell = document.createElement("td")
                                 row_number_cell.textContent = str(i + 1)
                                 row.appendChild(row_number_cell)
-
+                
+                                # ✅ Process fields dynamically
                                 for field in ["name", "assigned_to", "work_hours_per_day", "days", "hours_to_complete", "predecessor", "start_date", "end_date"]:
                                     cell = document.createElement("td")
-
+                
                                     if is_milestone and field in ["work_hours_per_day", "days", "hours_to_complete"]:
                                         cell.textContent = "-"  
                                     elif field == "assigned_to":
                                         container = document.createElement("div")
                                         container.setAttribute("data-field", field)
-
+                
                                         assigned_members = activity.get(field, "").split(";")
-
+                
                                         for member in team_members:
                                             checkbox = document.createElement("input")
                                             checkbox.type = "checkbox"
                                             checkbox.value = member
                                             checkbox.checked = member in assigned_members
                                             container.appendChild(checkbox)
-
+                
                                             label = document.createElement("label")
                                             label.textContent = member
                                             container.appendChild(label)
-
+                
                                             container.appendChild(document.createElement("br"))
-
+                
                                         cell.appendChild(container)
                                     elif field in ["start_date", "end_date"]:
                                         input = document.createElement("input")
@@ -349,11 +423,13 @@
                                         input.value = activity.get(field, "")
                                         input.setAttribute("data-field", field)
                                         cell.appendChild(input)
-
+                
                                     row.appendChild(cell)
-
-                                # ✅ Add Delete Button
-                                delete_cell = document.createElement("td")
+                
+                                # ✅ Add Delete Button + Drag Handle in the Same Cell
+                                action_cell = document.createElement("td")
+                
+                                # Delete Button
                                 delete_button = document.createElement("button")
                                 delete_button.textContent = "Delete"
                                 delete_button.style.backgroundColor = "red"
@@ -362,17 +438,42 @@
                                 delete_button.style.padding = "5px 10px"
                                 delete_button.style.cursor = "pointer"
                                 delete_button.onclick = create_proxy(lambda event, r=row: delete_row(r))
-                                
-                                delete_cell.appendChild(delete_button)
-                                row.appendChild(delete_cell)
-
+                
+                                # Drag Handle Button
+                                drag_handle = document.createElement("button")
+                                drag_handle.textContent = "↕"
+                                drag_handle.classList.add("drag-handle")
+                                drag_handle.style.cursor = "grab"
+                                drag_handle.style.border = "none"
+                                drag_handle.style.background = "transparent"
+                                drag_handle.style.fontSize = "16px"
+                                drag_handle.style.color = "#555"
+                                drag_handle.style.marginLeft = "10px"  # Add space between buttons
+                
+                                row.setAttribute("draggable", "true")  # ✅ Make the row draggable
+                                row.addEventListener("dragstart", create_proxy(drag_start))
+                                row.addEventListener("dragover", create_proxy(drag_over))
+                                row.addEventListener("drop", create_proxy(drag_drop))
+                                row.addEventListener("dragend", create_proxy(drag_end))
+                
+                                # Append buttons to the action cell
+                                action_cell.appendChild(delete_button)
+                                action_cell.appendChild(drag_handle)
+                
+                                # Add the action cell to the row
+                                row.appendChild(action_cell)
+                
+                                # ✅ Append row to table
                                 table_body.appendChild(row)
-
-                            update_gantt_chart()
+                
+                            update_gantt_chart()  # ✅ Update after rows are fully loaded
+                
                         else:
                             window.alert(f"Failed to fetch activities: {response.status}")
                     except Exception as e:
+                        console.error(f"🚨 Error loading activities: {str(e)}")
                         window.alert(f"Error loading activities: {str(e)}")
+                
 
                 def update_gantt_table():
                     """Update the table dynamically when activities are updated."""
@@ -464,8 +565,10 @@
 
                             row.appendChild(cell)
 
-                        # ✅ Add Delete Button
-                        delete_cell = document.createElement("td")
+                        # ✅ Add Delete Button + Drag Handle in the Same Cell
+                        action_cell = document.createElement("td")
+
+                        # Delete Button
                         delete_button = document.createElement("button")
                         delete_button.textContent = "Delete"
                         delete_button.style.backgroundColor = "red"
@@ -475,10 +578,33 @@
                         delete_button.style.cursor = "pointer"
                         delete_button.onclick = create_proxy(lambda event, r=row: delete_row(r))
 
-                        delete_cell.appendChild(delete_button)
-                        row.appendChild(delete_cell)
+                        # Drag Handle Button
+                        drag_handle = document.createElement("button")
+                        drag_handle.textContent = "↕"
+                        drag_handle.classList.add("drag-handle")
+                        drag_handle.style.cursor = "grab"
+                        drag_handle.style.border = "none"
+                        drag_handle.style.background = "transparent"
+                        drag_handle.style.fontSize = "16px"
+                        drag_handle.style.color = "#555"
+                        drag_handle.style.marginLeft = "10px"  # Add space between buttons
 
-                        table_body.appendChild(row)  # ✅ Append the updated row
+                        row.setAttribute("draggable", "true")  # ✅ Make the row draggable
+                        row.addEventListener("dragstart", create_proxy(drag_start))
+                        row.addEventListener("dragover", create_proxy(drag_over))
+                        row.addEventListener("drop", create_proxy(drag_drop))
+                        row.addEventListener("dragend", create_proxy(drag_end))
+
+                        # Append buttons to the action cell
+                        action_cell.appendChild(delete_button)
+                        action_cell.appendChild(drag_handle)
+
+                        # Add the action cell to the row
+                        row.appendChild(action_cell)
+
+                        # ✅ Append the updated row
+                        table_body.appendChild(row)
+
 
                 def delete_row(row):
                     """Delete a row from the table and remove it from activities list."""
@@ -486,18 +612,40 @@
                     row_index = list(table_body.children).index(row)  # Find the index of the row
 
                     if 0 <= row_index < len(activities):
-                        activities.pop(row_index)  # Remove from activities list
+                        task_to_delete = activities[row_index]
 
-                    row.remove()  # Remove the row from the DOM
-                    update_gantt_chart()  # Refresh the Gantt chart
+                        # ✅ **Check if task is a predecessor for any other task**
+                        task_id = str(row_index + 1)  # Convert to 1-based index
+                        has_dependents = any(
+                            task_id in a.get("predecessor", "").split(";") for a in activities
+                        )
+
+                        if has_dependents:
+                            window.alert(f"Cannot delete {task_to_delete['name']} as it is a predecessor to other tasks.")
+                            return  # 🚫 Stop deletion
+
+                        # ✅ **Remove task from activities list**
+                        activities.pop(row_index)
+                        row.remove()  # Remove from DOM
+
+                        # ✅ **Update predecessor references for all remaining tasks**
+                        for a in activities:
+                            preds = a.get("predecessor", "").split(";")
+                            preds = [p for p in preds if p != task_id]  # Remove deleted task
+                            a["predecessor"] = ";".join(preds) if preds else ""  # Update predecessor
+
+                        update_gantt_chart()  # Refresh Gantt chart
+                        update_gantt_table()  # Refresh table
+
 
                                                 
                 def update_gantt_chart():
-                    """Update the Gantt chart visualization dynamically based on the latest dates."""
+                    """Update the Gantt chart visualization dynamically based on the latest dates and highlight the critical path."""
                     chart_div = document.getElementById("chart-section")
                     chart_div.innerHTML = ""  # Clear existing chart
                 
                     sorted_activities = sort_activities_by_predecessor()
+                    calculate_critical_path()  # ✅ Compute the critical path before drawing
                 
                     for i, activity in enumerate(sorted_activities):
                         is_milestone = not activity.get("work_hours_per_day") and not activity.get("days")
@@ -512,7 +660,7 @@
                         activity["start_date_offset"] = days_offset  # ✅ Store offset for dependency line
                 
                         if is_milestone:
-                            # ✅ **Milestone Handling **
+                            # ✅ **Milestone Handling**
                             milestone = document.createElement("div")
                             milestone.style.position = "absolute"
                             milestone.style.width = "12px"
@@ -525,6 +673,10 @@
                             chart_div.appendChild(milestone)
                 
                         else:
+                            # ✅ **Determine if the task is on the Critical Path**
+                            is_critical = activity.get("is_critical", False)
+                            task_color = "red" if is_critical else "blue"  # Critical tasks are red, others are blue
+                
                             # ✅ **Regular Task Handling**
                             assigned_str = "; ".join(activity["assigned_to"]) if isinstance(activity["assigned_to"], list) else activity["assigned_to"]
                 
@@ -536,7 +688,7 @@
                             bar.style.width = f"{int(activity['days']) * 20}px"
                             bar.style.height = "20px"
                             bar.style.position = "absolute"
-                            bar.style.backgroundColor = "blue"
+                            bar.style.backgroundColor = task_color  # ✅ Critical tasks are red
                             bar.style.color = "white"
                             bar.style.textAlign = "top"
                             bar.style.lineHeight = "20px"
@@ -792,28 +944,28 @@
                     asyncio.ensure_future(async_save_gantt_chart())
     
                 async def async_save_gantt_chart():
-                    """Async function to handle saving Gantt chart data, with predecessor validation."""
+                    """Async function to handle saving Gantt chart data while ensuring correct predecessor validation."""
                     table_body = document.querySelector("#activity-table tbody")
                     rows = table_body.querySelectorAll("tr")
+                    activities_dict = {a["name"]: a for a in activities}  # ✅ Create lookup for existing activities
                     activities.clear()  # Reset activities list
                 
                     missing_required_fields = False  # Track missing required fields
-                    invalid_predecessor = False  # Track if there's an invalid predecessor
+                    invalid_predecessor = False  # Track invalid predecessors
                 
                     for row_index, row in enumerate(rows):
                         activity = {}
                         inputs = row.querySelectorAll("input")
                 
-                        assigned_to_div = row.querySelector("div[data-field='assigned_to']")
+                        activity["row_num"] = str(row_index + 1)  # ✅ Store row number
                 
+                        assigned_to_div = row.querySelector("div[data-field='assigned_to']")
                         if assigned_to_div:
                             selected_members = []
                             checkboxes = assigned_to_div.querySelectorAll("input[type='checkbox']")
-                
                             for checkbox in checkboxes:
                                 if checkbox.checked:
                                     selected_members.append(checkbox.value)
-                
                             activity["assigned_to"] = selected_members
                         else:
                             activity["assigned_to"] = []
@@ -825,53 +977,143 @@
                                 value = input.value.strip()
                                 activity[field] = value if value else ""
                 
-                        # ✅ **Handle Milestones Correctly**
+                        # ✅ Retain `completed_seconds`
+                        task_name = activity.get("name", "")
+                        if task_name in activities_dict:
+                            activity["completed_seconds"] = activities_dict[task_name].get("completed_seconds", 0)
+                        else:
+                            activity["completed_seconds"] = 0  # Default if no prior data
+                
+                        # ✅ Handle Milestones (No work hours or days)
                         is_milestone = not activity.get("work_hours_per_day") and not activity.get("days")
                 
                         if is_milestone:
                             if not activity.get("start_date"):
-                                activity["start_date"] = datetime.now().strftime("%Y-%m-%d")  # Default to today
+                                activity["start_date"] = datetime.now().strftime("%Y-%m-%d")
                             if not activity.get("end_date"):
-                                activity["end_date"] = activity["start_date"]  # Milestones have the same start & end date
-                
+                                activity["end_date"] = activity["start_date"]
                         else:
-                            # **Ensure required fields are present**
+                            # Ensure required fields
                             if not activity.get("name") or not activity.get("days"):
                                 missing_required_fields = True
-                                row.style.backgroundColor = "lightcoral"  # Highlight invalid row
+                                row.style.backgroundColor = "lightcoral"
                             else:
-                                row.style.backgroundColor = ""  # Reset color for valid rows
+                                row.style.backgroundColor = ""
                 
-                            # **Calculate Hours to Complete**
+                            # ✅ Calculate Hours to Complete
                             activity["hours_to_complete"] = str(int(activity["work_hours_per_day"]) * int(activity["days"]))
                 
-                        # ✅ **Validate Predecessors**
+                        # ✅ Validate Predecessors but allow them to be later in row order
                         if activity.get("predecessor"):
                             predecessors = activity["predecessor"].split(";")
+                            valid_predecessors = []
+                
                             for pred in predecessors:
                                 if pred.isdigit():
-                                    pred_index = int(pred) - 1  # Convert to zero-based index
+                                    pred_index = int(pred) - 1  # Convert to 0-based index
                 
-                                    # Prevent self-reference
                                     if pred_index == row_index:
                                         invalid_predecessor = True
                                         row.style.backgroundColor = "lightcoral"
                                         console.error(f"Task {activity['name']} cannot have itself as a predecessor.")
+                                    else:
+                                        valid_predecessors.append(pred)
                 
-                        activities.append(activity)  # Add to activities list
+                            # ✅ Store valid predecessors
+                            activity["predecessor"] = ";".join(valid_predecessors) if valid_predecessors else ""
                 
-                    # **If required fields are missing, alert user and stop**
+                        activities.append(activity)  # ✅ Add to activities list
+                
+                    # ✅ Stop saving if required fields are missing
                     if missing_required_fields:
                         window.alert("Please complete all required fields (Activity Name, Days to Complete) before saving.")
                         return  
                 
-                    # **If invalid predecessors exist, alert user and stop**
+                    # ✅ Stop saving if an invalid predecessor exists
                     if invalid_predecessor:
-                        window.alert("Invalid predecessor detected! A task cannot have itself or a future task as a predecessor.")
+                        window.alert("Invalid predecessor detected! A task cannot have itself as a predecessor.")
                         return
                 
-                    # **Save data to server**
+                    # ✅ Save data to server
                     await save_to_server(activities, project_code)
+                
+
+                dragged_row = None  # ✅ Track the row being dragged
+
+                def drag_start(event):
+                    """Start dragging and store the dragged row."""
+                    global dragged_row
+                    dragged_row = event.target.closest("tr")  # ✅ Ensure we get the full row
+                    dragged_row.style.opacity = "0.5"  # ✅ Add transparency effect while dragging
+                    event.dataTransfer.effectAllowed = "move"
+
+                def drag_over(event):
+                    """Allow dragging by preventing default behavior."""
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = "move"  # ✅ Show move cursor
+
+                def drag_drop(event):
+                    """Reorder the dragged row when dropped and update row numbers."""
+                    global dragged_row
+                    if not dragged_row:
+                        return
+
+                    target_row = event.target.closest("tr")  # ✅ Ensure we target a full row
+                    if not target_row or dragged_row == target_row:
+                        return  # ✅ Ignore if dropping on itself
+
+                    table_body = document.querySelector("#activity-table tbody")
+                    rows = list(table_body.children)
+
+                    # ✅ Find the positions of dragged and target rows
+                    dragged_index = rows.index(dragged_row)
+                    target_index = rows.index(target_row)
+
+                    # ✅ Move dragged row to the new position
+                    if dragged_index < target_index:
+                        table_body.insertBefore(dragged_row, target_row.nextSibling)
+                    else:
+                        table_body.insertBefore(dragged_row, target_row)
+
+                    update_row_numbers()  # ✅ Update `row_num` after moving
+                    dragged_row.style.opacity = "1"  # ✅ Reset opacity after drop
+                    dragged_row = None  # ✅ Clear after dropping
+
+                def drag_end(event):
+                    """Reset row opacity after dragging ends."""
+                    global dragged_row
+                    if dragged_row:
+                        dragged_row.style.opacity = "1"
+                    dragged_row = None  # ✅ Reset after dragging ends
+
+                def update_row_numbers():
+                    """Update row numbers after dragging and adjust the activities list."""
+                    table_body = document.querySelector("#activity-table tbody")
+                    rows = list(table_body.children)
+
+                    # ✅ Create a mapping of old row numbers to new row numbers
+                    old_to_new_row_nums = {}
+
+                    for index, row in enumerate(rows):
+                        new_row_num = str(index + 1)
+                        old_row_num = row.cells[0].textContent  # ✅ First column is the row number
+
+                        old_to_new_row_nums[old_row_num] = new_row_num  # ✅ Track changes
+
+                        # ✅ Update row number in UI (First Column, not the task name)
+                        row.cells[0].textContent = new_row_num  
+
+                    # ✅ Update the `row_num` in activities while preserving task names
+                    for activity in activities:
+                        old_num = activity["row_num"]
+                        if old_num in old_to_new_row_nums:
+                            activity["row_num"] = old_to_new_row_nums[old_num]  # ✅ Update `row_num`
+
+                    console.log("✅ Row numbers updated correctly:", activities)
+
+
+                
+                
                 
                 
                 
