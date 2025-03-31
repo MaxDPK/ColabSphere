@@ -131,6 +131,10 @@ async def project_hub(request: Request, project_code: str, user: str):
     if user not in project.members:
         return "You are not a member of this project"
     
+    if not getattr(project, "gantt_chart", []):
+        print("⚠️ Warning: project.gantt_chart is empty. Reload from disk if needed.")
+
+
     all_tasks = [
         {
             **task, 
@@ -281,12 +285,13 @@ async def get_activities(project_code: str):
     project = db.get_project(project_code)
     if not project:
         return {"activities": []}
-    
+
     activities = getattr(project, "gantt_chart", [])
 
     for activity in activities:
-        if isinstance(activity.get("assigned_to"), list):
-            activity["assigned_to"] = ";".join(activity["assigned_to"])
+        # ✅ Make sure `assigned_to` stays a list!
+        if isinstance(activity.get("assigned_to"), str):
+            activity["assigned_to"] = [u.strip() for u in activity["assigned_to"].split(";") if u.strip()]
 
         # ✅ Ensure `completed_seconds` is always present
         if "work_hours_per_day" in activity and "days" in activity:
@@ -294,6 +299,7 @@ async def get_activities(project_code: str):
                 activity["completed_seconds"] = 0  # Default to 0
 
     return {"activities": activities}
+
 
 
 

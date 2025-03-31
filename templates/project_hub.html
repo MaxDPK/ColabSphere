@@ -438,6 +438,12 @@
 
             latest_completed_seconds = latest_progress.get("completed_seconds", 0)
 
+            # ✅ Update the DOM so it's accurate if accessed later
+            progress_element = document.querySelector(f"#progress-{task_name.replace(' ', '-')}")
+            if progress_element:
+                progress_element.setAttribute("data-completed-seconds", str(latest_completed_seconds))
+
+
             window.alert(f"✅ Started working on task '{task_name}' with {latest_completed_seconds}s completed.")
 
             ws.send(json.dumps({
