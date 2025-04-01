@@ -61,6 +61,18 @@
                 .line-vertical {
                     width: 2px;
                 }
+                .tooltip {
+                    position: absolute;
+                    background-color: #f9f9f9;
+                    border: 1px solid #aaa;
+                    padding: 8px;
+                    font-size: 12px;
+                    box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+                    z-index: 100;
+                    display: none;
+                    pointer-events: none;
+                    border-radius: 5px;
+                }
             </style>
         </head>
         <body>
@@ -93,11 +105,14 @@
             <a href="#" onclick="window.location.href='/project_hub/{{ project_code }}?user={{ user }}'">← Back to Project Hub</a>
 
 
-
-
             <div id="chart-section">
                 <h2>Gantt Chart Visualization</h2>
             </div>
+
+            <div id="tooltip" class="tooltip"></div>
+
+
+            
 
             <py-script>
                 from js import WebSocket, document, console, window
@@ -718,6 +733,8 @@
                     task_container = document.createElement("div")  # Wrapper for all tasks
                     task_container.style.position = "relative"
                     task_container.style.width = f"{table_width}px"
+
+                    tooltip = document.getElementById("tooltip")
                 
                     for i, activity in enumerate(sorted_activities):
                         is_milestone = not activity.get("work_hours_per_day") and not activity.get("days")
@@ -807,6 +824,41 @@
                             progress_container.appendChild(progress_fill)
                             progress_container.appendChild(progress_text)
                             bar.appendChild(progress_container)
+
+                            # ✅ Tooltip logic starts here
+                            def show_tooltip(event, activity=activity):
+                                completed = int(activity.get('completed_seconds', 0))
+                                total = int(activity.get("hours_to_complete", 1)) * 3600
+                                remaining = max(0, total - completed)
+                                remaining_h = remaining // 3600
+                                remaining_m = (remaining % 3600) // 60
+
+                                now = datetime.now()
+                                end_date = datetime.strptime(activity["end_date"], "%Y-%m-%d")
+                                days_left = (end_date - now).days
+
+                                assigned = activity.get("assigned_to", [])
+                                if isinstance(assigned, list):
+                                    assigned = ", ".join(assigned)
+
+                                tooltip.innerHTML = f"""
+                                    <strong>{activity['name']}</strong><br>
+                                    Assigned to: {assigned}<br>
+                                    Completed: {completed // 3600}h {(completed % 3600) // 60}m<br>
+                                    Remaining: {remaining_h}h {remaining_m}m<br>
+                                    Days left: {days_left if days_left >= 0 else 'Overdue'}<br>
+                                    Status: {"✅ Completed" if remaining == 0 else "In Progress"}
+                                """
+                                tooltip.style.left = f"{event.pageX + 15}px"
+                                tooltip.style.top = f"{event.pageY + 15}px"
+                                tooltip.style.display = "block"
+
+                            def hide_tooltip(event):
+                                tooltip.style.display = "none"
+
+                            bar.addEventListener("mouseover", create_proxy(show_tooltip))
+                            bar.addEventListener("mousemove", create_proxy(show_tooltip))
+                            bar.addEventListener("mouseout", create_proxy(hide_tooltip))
                 
                             task_container.appendChild(bar)
                 
