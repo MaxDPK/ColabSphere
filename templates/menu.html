@@ -71,15 +71,6 @@
             {% endfor %}
         </div>
 
-        <h1>Planner</h1>
-        <div class="calendar-container">
-            <div class="calendar-header">
-                <button id="prevMonth">◀</button>
-                <h2 id="currentMonth"></h2>
-                <button id="nextMonth">▶</button>
-            </div>
-            <div class="calendar-grid" id="calendar"></div>
-        </div>
         
         <!-- Modal for Adding Tasks -->
         <div class="overlay" id="overlay"></div>
@@ -182,50 +173,7 @@
             except Exception as e:
                 print(f"Error updating recent projects: {e}")
         
-        async def render_calendar():
-            """Renders the calendar correctly with tasks displayed in each square."""
-            calendar = document.getElementById("calendar")
-            calendar.innerHTML = ""
-
-            for day in day_names:
-                header_div = document.createElement("div")
-                header_div.className = "day-header"
-                header_div.textContent = day
-                calendar.appendChild(header_div)
-
-            month_start = datetime(current_year, current_month, 1)
-            first_day = (month_start.weekday() + 1) % 7
-            days_in_month = get_days_in_month(current_year, current_month)
-
-            for _ in range(first_day):
-                empty_div = document.createElement("div")
-                empty_div.className = "day empty"
-                calendar.appendChild(empty_div)
-
-            project_code = document.body.getAttribute("data-project-code")
-            user = document.querySelector(".username").textContent.strip()
-
-            for day in range(1, days_in_month + 1):
-                day_div = document.createElement("div")
-                day_div.className = "day"
-                day_div.textContent = str(day)
-                selected_date = f"{current_year}-{current_month:02d}-{day:02d}"
-                day_div.addEventListener("click", create_proxy(lambda event, day=day: open_task_modal(day)))
-
-                if project_code:
-                    asyncio.ensure_future(fetch_tasks(project_code, selected_date, day_div))
-
-                calendar.appendChild(day_div)
-    
-        async def periodic_update():
-            """Continuously update recent projects every 3 seconds."""
-            while True:
-                await fetch_recent_projects()
-                await asyncio.sleep(3)  # Fetch new data every 3 seconds
-    
-        # Start updating recent projects when the page loads
-        asyncio.create_task(render_calendar())
-
+       
 
         def search_projects(event):
             """Filter projects dynamically based on search input."""
@@ -244,134 +192,7 @@
 
 
         
-        def get_days_in_month(year, month):
-            """Returns the number of days in a given month, including leap year handling."""
-            if month == 12:
-                next_month_start = datetime(year + 1, 1, 1)
-            else:
-                next_month_start = datetime(year, month + 1, 1)
-            return (next_month_start - timedelta(days=1)).day
-
-        async def change_month(offset):
-            """Handles month navigation safely without errors."""
-            global current_year, current_month
-            current_month += offset
-            if current_month < 1:
-                current_month = 12
-                current_year -= 1
-            elif current_month > 12:
-                current_month = 1
-                current_year += 1
     
-            document.getElementById("currentMonth").textContent = f"{month_names[current_month - 1]} {current_year}"
-            await render_calendar()
-
-        
-
-        async def fetch_tasks(project_code, selected_date, day_div):
-            """Fetches tasks for a selected date and updates the calendar square."""
-            url = f"{BASE_URL}/get_tasks?project_code={project_code}&date={selected_date}"
-
-            try:
-                response = await pyfetch(url)
-                data = await response.json()  # No need for to_py
-                # ✅ Correct conversion
-
-
-                day_div.innerHTML = f"<strong>{selected_date.split('-')[-1]}</strong>"  # Show date in square
-                if "tasks" in data:
-                    for task in data["tasks"].values():
-                        task_element = document.createElement("div")
-                        task_element.className = "task-item"
-
-                        # Extract only the task name
-                        if isinstance(task, dict) and "data" in task:
-                            task_element.textContent = ", ".join(task["data"])  # Join if list
-                        elif isinstance(task, str):
-                            task_element.textContent = task  # Direct string
-                        else:
-                            task_element.textContent = str(task)  # Fallback
-
-                        day_div.appendChild(task_element)
-
-            except Exception as e:
-                console.log(f"❌ Error fetching tasks: {e}")
-
-
-
-
-        
-
-        async def save_task(event):
-            """Saves a task and updates the calendar square."""
-            selected_date = document.getElementById("selectedDate").textContent
-            task_description = document.getElementById("taskInput").value.strip()
-            user = document.querySelector(".username").textContent.strip()
-            project_code = document.body.getAttribute("data-project-code")
-
-            if not project_code:
-                console.log("⚠️ No project detected. Please create or join a project first.")
-                return
-
-            if not task_description:
-                console.log("⚠️ Task description cannot be empty.")
-                return
-
-            task_data = json.dumps({
-                "project_code": project_code,
-                "date": selected_date,
-                "task": task_description,
-                "user": user
-            })
-
-            headers = js.Object.fromEntries([["Content-Type", "application/json"]])  # ✅ Correct format
-
-            try:
-                response = await fetch(
-                    f"{BASE_URL}/add_task",
-                    method="POST",
-                    body=task_data,
-                    headers=headers  # ✅ Pass headers correctly
-                )
-
-                if response.ok:
-                    console.log("✅ Task saved successfully!")
-                    await render_calendar()
-                    await close_task_modal()
-                else:
-                    error_text = await response.text()
-                    console.log(f"❌ Failed to save task. Response: {response.status}, Error: {error_text}")
-            except Exception as e:
-                console.log(f"🚨 Error saving task: {e}")
-
-
-
-
-
-
-        async def close_task_modal():
-            """Closes the task modal after saving."""
-            document.getElementById("taskModal").style.display = "none"
-            document.getElementById("overlay").style.display = "none"
-            document.getElementById("taskInput").value = ""  # Clear input field
-
-        def open_task_modal(day):
-            """Opens the task modal for a selected day."""
-            document.getElementById("selectedDate").textContent = f"{current_year}-{current_month:02d}-{day:02d}"
-            document.getElementById("taskModal").style.display = "block"
-            document.getElementById("overlay").style.display = "block"
-
-        # Attach event listener to the Save button
-        document.getElementById("saveTask").addEventListener("click", create_proxy(save_task))
-
-        # Attach event listeners for month navigation
-        document.getElementById("prevMonth").addEventListener("click", create_proxy(lambda event: asyncio.ensure_future(change_month(-1))))
-        document.getElementById("nextMonth").addEventListener("click", create_proxy(lambda event: asyncio.ensure_future(change_month(1))))
-
-        # Initialize Calendar
-        document.getElementById("currentMonth").textContent = f"{month_names[current_month - 1]} {current_year}"
-        asyncio.ensure_future(render_calendar())
-
         
 
     </py-script>
