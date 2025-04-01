@@ -6,6 +6,9 @@
     <title>Login</title>
     <link href='https://fonts.googleapis.com/css?family=Lalezar' rel='stylesheet'>
     <link href='https://fonts.googleapis.com/css?family=Albert Sans' rel='stylesheet'>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./static/login.css">
 </head>
 <body>
@@ -22,13 +25,15 @@
             
             <!-- Display error message if exists -->
             {% if error_message %}
-                <p style="color: red;">{{ error_message }}</p>
+                <p class="error-message">{{ error_message }}</p>
             {% endif %}
 
             <p class="register"> <span class="new-here">New here?</span> <a href="/signup">Register now</a></p>
         </div>
+        
         <div class="illustration">
-            <img src="../seal.jpg" alt="Illustration">
+            <!-- Add an image or illustration here -->
+            <img src="illustration.png" alt="Illustration" class="illustration-img">
         </div>
     </div>
 </body>

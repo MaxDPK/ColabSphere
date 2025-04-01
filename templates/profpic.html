@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Choose Profile Picture</title>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
+        .profile-container { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+    </style>
+</head>
+<body>
+    <h2>Choose a Profile Picture</h2>
+
+    <div class="profile-container">
+        <h3>Upload Your Own Profile Picture</h3>
+        <form action="/upload_profile_pic" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="user" value="{{ user }}">
+            <input type="file" name="file" required>
+            <button type="submit">Upload</button>
+        </form>
+
+        <h3>Or Keep the Default Profile Picture</h3>
+        <form action="/keep_default_profile_pic" method="post">
+            <input type="hidden" name="user" value="{{ user }}">
+            <button type="submit">Use Default Profile Picture</button>
+        </form>
+    </div>
+
+</body>
+</html>x

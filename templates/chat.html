@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Chat</title>
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        #messages { height: 300px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; }
+        .message { padding: 5px; margin-bottom: 5px; border-bottom: 1px solid #ddd; }
+        .sender { font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>Chat: {{ chat.chat_id }}</h1>
+
+    <div id="messages"></div>
+
+    <input type="text" id="messageInput" placeholder="Type a message">
+    <button py-click="send_message">Send</button>
+
+    <py-script>
+        import asyncio
+        from js import document, WebSocket, window
+        from pyodide.ffi import create_proxy
+        import json
+    
+        chat_id = "{{ chat.chat_id }}"
+        username = "{{ user }}"
+        project_code = "{{ project_code }}".strip()
+    
+        if not project_code or project_code == "None":
+            print("❌ ERROR: Missing project_code in template")
+        else:
+            print(f"✅ Project Code Detected: {project_code}")
+    
+        ws_url = f"ws://{window.location.host}/ws/chat/{chat_id}?user={username}&project_code={project_code}"
+        print(f"🔍 WebSocket URL: {ws_url}")
+    
+        ws = None
+        reconnect_attempts = 0  
+    
+        def connect_websocket():
+            """Establish WebSocket connection and prevent infinite reconnect loops."""
+            global ws, reconnect_attempts
+            if ws and ws.readyState in [WebSocket.OPEN, WebSocket.CONNECTING]:
+                return  
+    
+            if reconnect_attempts >= 5:
+                print("❌ WebSocket failed to connect after multiple attempts. Stopping reconnect.")
+                return
+    
+            print(f"🔄 Connecting WebSocket... Attempt {reconnect_attempts + 1}")
+            reconnect_attempts += 1
+            ws = WebSocket.new(ws_url)
+    
+            ws.addEventListener("open", create_proxy(on_open))
+            ws.addEventListener("message", create_proxy(on_message))
+            ws.addEventListener("error", create_proxy(on_error))
+            ws.addEventListener("close", create_proxy(on_close))
+    
+        def on_open(event):
+            """Handle WebSocket connection open."""
+            global reconnect_attempts
+            print("✅ WebSocket connection established.")
+            reconnect_attempts = 0  
+    
+        def on_message(event):
+            """Handle incoming messages and chat history."""
+            try:
+                data = json.loads(event.data)
+            except Exception as e:
+                print("❌ JSON Parsing Error:", e)
+                return
+    
+            if data.get("error"):
+                print(f"❌ Server Error: {data['error']}")
+                return  # Stop processing if there's an error message
+    
+            # ✅ Handle chat history
+            if data.get("action") == "history":
+                print("📜 Loading chat history...")
+                messages_div = document.getElementById("messages")
+                messages_div.innerHTML = ""  # Clear chat box
+    
+                for msg in data["messages"]:
+                    if isinstance(msg, dict) and "user" in msg and "message" in msg:  # ✅ Ensure both fields exist
+                        message_element = document.createElement("div")
+                        message_element.classList.add("message")
+                        message_element.innerHTML = f"{msg['user']}: {msg['message']}"
+                        messages_div.appendChild(message_element)
+                    else:
+                        print(f"⚠️ WARNING: Skipping invalid message: {msg}")
+    
+                messages_div.scrollTop = messages_div.scrollHeight  
+    
+            # ✅ Handle new messages
+            elif data.get("action") == "new_message":
+                if isinstance(data, dict) and "user" in data and "message" in data:  # ✅ Prevent KeyError
+                    print(f"📩 Received new message: {data['user']}: {data['message']}")
+                    messages_div = document.getElementById("messages")
+                    message_element = document.createElement("div")
+                    message_element.classList.add("message")
+                    message_element.innerHTML = f"{data['user']}: {data['message']}"
+                    messages_div.appendChild(message_element)
+    
+                    messages_div.scrollTop = messages_div.scrollHeight  
+    
+        def on_error(event):
+            """Handle WebSocket errors."""
+            print("❌ WebSocket encountered an error:", event)
+    
+        def on_close(event):
+            """Handle WebSocket disconnection and attempt reconnect."""
+            print("❌ WebSocket connection closed.")
+            if reconnect_attempts < 5:
+                print(f"🔄 Reconnecting in 2 seconds... (Attempt {reconnect_attempts})")
+                window.setTimeout(create_proxy(connect_websocket), 2000)
+    
+        def send_message(event=None):
+            """Send a message over WebSocket."""
+            global ws
+            message_input = document.getElementById("messageInput")
+            if message_input and ws and ws.readyState == WebSocket.OPEN:
+                message = message_input.value
+                if message:
+                    ws.send(f"{username}: {message}")
+                    message_input.value = ""
+            else:
+                print("❌ Error: WebSocket is closed. Reconnecting...")
+                connect_websocket()
+    
+        connect_websocket()
+    
+        send_button = document.getElementById("sendButton")
+        if send_button:
+            send_button.addEventListener("click", create_proxy(send_message))
+    
+    </py-script>
+    
+    
+    
+    
+
+</body>
+</html>

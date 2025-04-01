@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborative PyScript Whiteboard</title>
+
+    <!-- PyScript -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.11.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.11.1/core.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+        }
+        #toolbar {
+            width: 60px;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            box-shadow: 2px 0px 5px rgba(0,0,0,0.2);
+            z-index: 10;
+            position: absolute;
+            left: 10px;
+            top: 20%;
+        }
+        button {
+            width: 40px;
+            height: 40px;
+            margin: 15%;
+            border: none;
+            cursor: pointer;
+            background: lightgray;
+        }
+        canvas {
+            flex: 1;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <button id="pencil">✏️</button>
+        <button id="pen">🖊️</button>
+        <button id="eraser">🧹</button>
+        <button id="highlight">🟨</button>
+        <button id="clear">🗑️</button>
+        <input type="color" id="colorPicker" value="#000000">
+    </div>
+    <canvas id="whiteboard"></canvas>
+
+    <script type="py">
+import js
+import asyncio
+import json
+from pyodide.ffi import create_proxy
+
+# WebSocket connection
+project_code = js.window.location.pathname.split("/").pop()  # Extract project code from URL
+protocol = "wss" if js.window.location.protocol == "https:" else "ws"
+host = js.window.location.host
+ws = js.WebSocket.new(f"{protocol}://{host}/ws/whiteboard/{project_code}")
+
+# Get the whiteboard canvas and context
+canvas = js.document.getElementById("whiteboard")
+ctx = canvas.getContext("2d")
+
+# Ensure full-screen canvas
+def resize_canvas():
+    canvas.width = js.window.innerWidth
+    canvas.height = js.window.innerHeight
+
+resize_canvas()
+js.window.addEventListener("resize", create_proxy(lambda event: resize_canvas()))
+
+# Default drawing settings
+ctx.strokeStyle = "black"
+ctx.lineWidth = 2
+ctx.globalAlpha = 1
+
+drawing = False
+tool = "pen"  # Default tool
+color_picker = js.document.getElementById("colorPicker")
+
+def get_selected_color():
+    return color_picker.value
+
+def start_draw(event):
+    global drawing
+    drawing = True
+    ctx.beginPath()
+    ctx.moveTo(event.offsetX, event.offsetY)
+
+    # Send a "start" event to WebSocket
+    data = {
+        "action": "start",
+        "x": event.offsetX,
+        "y": event.offsetY
+    }
+    ws.send(json.dumps(data))
+
+
+
+def draw(event):
+    if not drawing:
+        return
+
+    ctx.lineTo(event.offsetX, event.offsetY)
+    ctx.stroke()
+
+    data = {
+        "x": event.offsetX,
+        "y": event.offsetY,
+        "tool": tool,
+        "color": get_selected_color() if tool != "eraser" else "white",
+        "lineWidth": ctx.lineWidth 
+    }
+    ws.send(json.dumps(data))
+
+def stop_draw(event):
+    global drawing
+    drawing = False
+
+def clear_canvas(event):
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ws.send(json.dumps({"action": "clear"}))  # Send to all clients
+
+def set_pencil(event):
+    global tool
+    tool = "pencil"
+    ctx.strokeStyle = "black"
+    ctx.lineWidth = 0.25
+    ctx.globalAlpha = 1
+
+def set_pen(event):
+    global tool
+    tool = "pen"
+    ctx.strokeStyle = get_selected_color()
+    ctx.lineWidth = 1.5
+    ctx.globalAlpha = 1
+
+def set_eraser(event):
+    global tool
+    tool = "eraser"
+    ctx.strokeStyle = "white"
+    ctx.lineWidth = 10
+    ctx.globalAlpha = 1
+
+def set_highlight(event):
+    global tool
+    tool = "highlight"
+    ctx.strokeStyle = get_selected_color()
+    ctx.lineWidth = 10
+    ctx.globalAlpha = 0.08
+
+# Event listeners
+canvas.addEventListener("mousedown", create_proxy(start_draw))
+canvas.addEventListener("mousemove", create_proxy(draw))
+canvas.addEventListener("mouseup", create_proxy(stop_draw))
+canvas.addEventListener("mouseleave", create_proxy(stop_draw))
+
+js.document.getElementById("pencil").addEventListener("click", create_proxy(set_pencil))
+js.document.getElementById("pen").addEventListener("click", create_proxy(set_pen))
+js.document.getElementById("eraser").addEventListener("click", create_proxy(set_eraser))
+js.document.getElementById("highlight").addEventListener("click", create_proxy(set_highlight))
+js.document.getElementById("clear").addEventListener("click", create_proxy(clear_canvas))
+
+# Handle incoming WebSocket messages
+def handle_message(event):
+    data = json.loads(event.data)
+
+    if "action" in data:
+        if data["action"] == "clear":
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
+        elif data["action"] == "start":
+            ctx.beginPath()  # Start a new path when receiving "start"
+            ctx.moveTo(data["x"], data["y"])
+        return  # Return early to prevent drawing a line to (0,0)
+
+    ctx.strokeStyle = data["color"]
+    ctx.lineWidth = data.get("lineWidth", 2.5)  
+    ctx.globalAlpha = 1
+    ctx.lineTo(data["x"], data["y"])
+    ctx.stroke()
+        
+
+
+ws.addEventListener("message", create_proxy(handle_message))
+    </script>
+</body>
+</html>
