@@ -9,283 +9,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&display=swap" rel="stylesheet">
-
-
+    <link rel="stylesheet" href="/static/project_hub.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
-    <style>
-        body {
-            display: flex;
-            margin: 0;
-            font-family: Arial, sans-serif;
-        }
-        h1 {
-            font-family: "Amiri Quran", serif;  /* Alternative thin serif font */
-            font-weight: 300;  /* Very thin */
-            font-size: 48px;
-            color: #3B372E;
-            letter-spacing: 0.5px;
-        }
+    
 
-
-        .sidebar {
-            width: 200px;
-            background: #dec5a3;
-            padding: 20px;
-            height: 100vh;
-        }
-        .main-content {
-            flex-grow: 1;
-            padding: 20px;
-            background: #e6d6c1;
-        }
-        h2 {
-            font-size: 18px;
-            color: #354d2f;
-        }
-        .channel-section, .direct-message-section {
-            margin-bottom: 20px;
-        }
-        .channel-section button {
-            display: block;
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
-            color: #333;
-            padding: 5px;
-            text-align: left;
-            width: 100%;
-        }
-        .add-channel {
-            display: block;
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 14px;
-            color: #333;
-            padding: 5px;
-            text-align: left;
-            width: 100%;
-            margin-top: 10px;
-        }
-        .channel-section button:hover, .add-channel:hover {
-            background-color: #D9B08C;
-        }
-        .channel-section button:not(.add-channel)::before {
-            content: "# ";
-        }
-
-                /* === MODAL OVERLAY (BACKGROUND) === */
-        .overlay {
-            display: none;  /* Hidden by default */
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5); /* Dark background overlay */
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .modal {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
-            z-index: 1001; /* Ensure modal appears above overlay */
-            text-align: center;
-            width: 300px;
-            max-width: 90%;
-        }
-
-
-        /* === MODAL BOX === */
-        .modal-content {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
-            z-index: 1001; /* Ensure modal appears above overlay */
-            text-align: center;
-            width: 300px;
-            max-width: 90%;
-            opacity: 1;
-            visibility: visible;
-        }
-
-        /* === MODAL HEADER === */
-        .modal-content h2 {
-            margin-top: 0;
-            font-size: 18px;
-            color: #333;
-        }
-
-        /* === MODAL INPUT FIELD === */
-        .modal-content input {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-
-        /* === BUTTON CONTAINER INSIDE MODAL === */
-        .modal-buttons {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 15px;
-        }
-
-        /* === MODAL BUTTONS === */
-        .modal-buttons button {
-            padding: 8px 12px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        /* Green Confirm Button */
-        .modal-buttons button:first-child {
-            background: #4CAF50;
-            color: white;
-        }
-
-        /* Red Cancel Button */
-        .modal-buttons button:last-child {
-            background: #f44336;
-            color: white;
-        }
-
-        /* === DROPDOWN MENU FOR RIGHT-CLICK OPTIONS === */
-        .dropdown-menu {
-            position: absolute;
-            background: white;
-            border: 1px solid #ccc;
-            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
-            padding: 5px;
-            z-index: 1000;
-            display: none;
-        }
-
-        .dropdown-menu ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .dropdown-menu li {
-            padding: 8px 12px;
-            cursor: pointer;
-        }
-
-        .dropdown-menu li:hover {
-            background: #f0f0f0;
-        }
-
-        /* === Main Seating Area === */
-        .seating-container {
-            position: relative;
-            width: 600px;
-            height: 500px;
-            margin: 50px auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* === Oval Table in the Center === */
-        .table {
-            width: 350px;
-            height: 200px;
-            background-color: #b88c5a;
-            border-radius: 50%;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
-        }
-
-        /* === Seats (Chairs) Styling === */
-        .seat {
-            width: 90px;
-            height: 120px;
-            background-image: url('/static/chair.png'); /* Use the chair image */
-            background-size: contain;
-            background-repeat: no-repeat;
-            background-position: center;
-            position: absolute;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* === Profile Picture on Chair === */
-        .profile-pic {
-            width: 50px; /* Circular effect */
-            height: 50px;
-            border-radius: 50%;
-            position: absolute;
-            top: 15px; /* Adjust so it sits on the chair */
-            left: 50%;
-            transform: translateX(-50%);
-            background-size: cover;
-            background-position: center;
-            border: 3px solid white; /* Optional */
-        }
-
-        /* === User Name under the Profile Picture === */
-        .member-name {
-            font-size: 14px;
-            font-weight: bold;
-            color: #333;
-            text-align: center;
-            position: absolute;
-            top: 80px;
-        }
-
-        /* === Online Status Indicator === */
-        .status-indicator {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: green;
-            border: 2px solid white;
-        }
-
-                /* Project Header - Aligns H1 and Button */
-        .project-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        /* Triangle Button (▶) */
-        .toggle-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 20px;
-            transform: rotate(0deg);
-            transition: transform 0.3s ease;
-        }
-
-        /* Rotated Triangle when Open */
-        .toggle-btn.open {
-            transform: rotate(90deg);
-        }
-
-    </style>
 </head>
 <body>
     <div class="sidebar">
@@ -395,6 +122,122 @@
         </div>
     </div>
 
+    <div id="calendar-container">
+        <div id="calendar-icon" class="calendar-icon">📅</div>
+        <div id="calendar-popup" class="calendar-popup" style="display: none;">
+            <div class="calendar-header-fixed">
+                <div id="calendar-header">
+                    <button id="prev-month">&lt;</button>
+                    <span id="calendar-month"></span>
+                    <button id="next-month">&gt;</button>
+                </div>
+                <div id="calendar-days-header"></div>
+            </div>
+            <div class="calendar-scroll-container">
+                <div id="calendar-grid"></div>
+            </div>
+        </div>
+    </div>
+    
+    
+
+        <!-- Modal for Adding Tasks -->
+    <div class="overlay" id="taskModal">
+        <div class="modal-content">
+            <h2>Add Task</h2>
+            <p id="selected-date"></p>
+            <input type="text" id="task-input" placeholder="Enter task">
+
+            <!-- Add time selection -->
+            <div class="time-selection">
+                <div class="time-field">
+                    <label for="task-time">Time:</label>
+                    <input type="text" id="task-time" readonly placeholder="Select time">
+                </div>
+                <div id="time-dropdown" class="time-dropdown" style="display: none;">
+                    <div class="time-list">
+                        <!-- Time slots will be populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="duration-field">
+                    <label>
+                        <input type="checkbox" id="all-day-checkbox"> All day
+                    </label>
+                </div>
+            </div>
+
+            <h4>Choose Color Category:</h4>
+            <div class="color-select" id="color-picker">
+                <div class="color-option" data-color="#1e88e5" data-label="Meeting" style="background:#1e88e5;"></div>
+                <div class="color-option" data-color="#43a047" data-label="Homework" style="background:#43a047;"></div>
+                <div class="color-option" data-color="#e53935" data-label="Urgent" style="background:#e53935;"></div>
+                <div class="color-option" data-color="#fbc02d" data-label="Reminder" style="background:#fbc02d;"></div>
+                <div class="color-option" data-color="#8e24aa" data-label="Personal" style="background:#8e24aa;"></div>
+            </div>
+
+            <p id="selected-category-label" style="text-align: center; font-weight: bold;"></p>
+
+            <div class="modal-buttons">
+                <button id="add-task-btn">Add Task</button>
+                <button class="cancel-modal-btn" data-modal="taskModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Editing Tasks -->
+    <div class="overlay" id="editTaskModal">
+        <div class="modal-content">
+            <h2>Edit Task</h2>
+            <p id="edit-selected-date"></p>
+            <input type="text" id="edit-task-input" placeholder="Enter task description">
+            <input type="hidden" id="edit-task-id">
+
+            <!-- Time selection -->
+            <div class="time-selection">
+                <div class="time-field">
+                    <label for="edit-task-time">Time:</label>
+                    <input type="text" id="edit-task-time" readonly placeholder="Select time">
+                </div>
+                <div id="edit-time-dropdown" class="time-dropdown" style="display: none;">
+                    <div class="time-list">
+                        <!-- Time slots will be populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="duration-field">
+                    <label>
+                        <input type="checkbox" id="edit-all-day-checkbox">
+                        <span>All day event</span>
+                    </label>
+                </div>
+            </div>
+
+            <h4>Choose Color Category</h4>
+            <div class="color-select" id="edit-color-picker">
+                <div class="color-option" data-color="#1e88e5" data-label="Meeting" style="background:#1e88e5;"></div>
+                <div class="color-option" data-color="#43a047" data-label="Homework" style="background:#43a047;"></div>
+                <div class="color-option" data-color="#e53935" data-label="Urgent" style="background:#e53935;"></div>
+                <div class="color-option" data-color="#fbc02d" data-label="Reminder" style="background:#fbc02d;"></div>
+                <div class="color-option" data-color="#8e24aa" data-label="Personal" style="background:#8e24aa;"></div>
+            </div>
+
+            <p id="edit-selected-category-label"></p>
+
+            <div class="task-status">
+                <label>
+                    <input type="checkbox" id="task-complete-checkbox">
+                    <span>Mark as Complete</span>
+                </label>
+            </div>
+
+            <div class="modal-buttons">
+                <button id="update-task-btn">Update Task</button>
+                <button class="cancel-modal-btn" data-modal="editTaskModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+
+
 
 
     <py-script>
@@ -404,16 +247,44 @@
         from pyodide.ffi import create_proxy
         from pyodide.http import pyfetch
         import math
+        import datetime
+        
         
         class ProjectHub:
             def __init__(self, project_code, username):
                 self.project_code = project_code
                 self.username = username
-                self.ws = None
+                self.ws_main = None  # WebSocket for project members
+                self.ws_tasks = None  # WebSocket for real-time tasks
+                
+
         
                 # Create persistent proxies for WebSocket event listeners
                 self.message_proxy = create_proxy(self.on_message)
+                self.task_message_proxy = create_proxy(self.on_task_message)
                 self.close_proxy = create_proxy(self.on_close)
+                
+                today = datetime.date.today()
+                self.current_year = today.year
+                self.current_month = today.month
+                self.today = today
+                self.init_calendar()
+                
+
+                self.select_color_proxy = create_proxy(self.select_color)
+                for el in document.querySelectorAll('.color-option'):
+                    el.addEventListener('click', self.select_color_proxy)
+
+                self.selected_color = "#1e88e5"
+                self.selected_label = "Meeting"  # or any default label
+
+                self.more_click_proxy = create_proxy(self._on_more_click)
+                self.task_data_by_date = {}
+
+                # Initialize edit task handlers
+                self.init_edit_task_handlers()
+
+
         
             async def connect_websocket(self):
                 protocol = "wss" if window.location.protocol == "https:" else "ws"
@@ -422,14 +293,887 @@
         
                 self.ws.addEventListener("message", self.message_proxy)
                 self.ws.addEventListener("close", self.close_proxy)
-        
+
+                # WebSocket for task updates
+                ws_task_url = f"{protocol}://{window.location.host}/ws/tasks/{self.project_code}"
+                self.ws_tasks = WebSocket.new(ws_task_url)
+                self.ws_tasks.addEventListener("message", self.task_message_proxy)
+                self.ws_tasks.addEventListener("close", self.close_proxy)
+
+                console.log("🔌 Task WebSocket connection established:", ws_task_url)
+
+                
+            
+            def update_calendar(self):
+                year = self.current_year
+                month = self.current_month
+                first_day = datetime.date(year, month, 1).weekday()
+                if first_day == 6:  # Make Sunday start the week (0 index)
+                    first_day = -1
+            
+                # Update month label
+                document.getElementById("calendar-month").innerText = datetime.date(year, month, 1).strftime('%B %Y')
+            
+                # Ensure proper structure exists
+                calendar_popup = document.getElementById("calendar-popup")
+                
+                # Create or get header container
+                header_fixed = calendar_popup.querySelector(".calendar-header-fixed")
+                if not header_fixed:
+                    header_fixed = document.createElement("div")
+                    header_fixed.classList.add("calendar-header-fixed")
+                    
+                    # Move existing header into fixed container
+                    calendar_header = document.getElementById("calendar-header")
+                    days_header = document.getElementById("calendar-days-header")
+                    
+                    if calendar_header:
+                        header_fixed.appendChild(calendar_header)
+                    if days_header:
+                        header_fixed.appendChild(days_header)
+                        
+                    calendar_popup.insertBefore(header_fixed, calendar_popup.firstChild)
+
+                # Create or get scroll container
+                scroll_container = calendar_popup.querySelector(".calendar-scroll-container")
+                if not scroll_container:
+                    scroll_container = document.createElement("div")
+                    scroll_container.classList.add("calendar-scroll-container")
+                    calendar_popup.appendChild(scroll_container)
+
+                # Create or get calendar grid
+                calendar_grid = document.getElementById("calendar-grid")
+                if not calendar_grid:
+                    calendar_grid = document.createElement("div")
+                    calendar_grid.id = "calendar-grid"
+                else:
+                    calendar_grid.innerHTML = ""  # Clear existing grid
+                
+                scroll_container.appendChild(calendar_grid)
+
+                # === Day of Week Header ===
+                day_labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+                header_container = document.getElementById("calendar-days-header")
+                header_container.innerHTML = ""  # Clear existing headers
+                
+                for label in day_labels:
+                    cell = document.createElement("div")
+                    cell.innerText = label
+                    cell.style.textAlign = "center"
+                    cell.style.fontWeight = "bold"
+                    header_container.appendChild(cell)
+
+                # Days in month
+                try:
+                    next_month = datetime.date(year if month < 12 else year + 1, (month % 12) + 1, 1)
+                except:
+                    next_month = datetime.date(year + 1, 1, 1)
+
+                days_in_month = (next_month - datetime.timedelta(days=1)).day
+
+                # Add padding for first day
+                for _ in range(first_day + 1):
+                    empty = document.createElement("div")
+                    empty.classList.add("calendar-day")
+                    empty.style.visibility = "hidden"
+                    calendar_grid.appendChild(empty)
+
+                # Add calendar days
+                for day in range(1, days_in_month + 1):
+                    date_str = f"{year}-{month:02}-{day:02}"
+
+                    day_cell = document.createElement("div")
+                    day_cell.classList.add("calendar-day")
+                    day_cell.dataset.date = date_str
+
+                    label = document.createElement("div")
+                    label.innerText = str(day)
+                    label.style.fontWeight = "bold"
+                    day_cell.appendChild(label)
+
+                    task_list = document.createElement("ul")
+                    task_list.classList.add("task-list")
+                    task_list.id = f"task-list-{date_str}"
+                    day_cell.appendChild(task_list)
+
+                    day_cell._open_task_modal_proxy = create_proxy(self.open_task_modal)
+                    day_cell.addEventListener("click", day_cell._open_task_modal_proxy)
+                    calendar_grid.appendChild(day_cell)
+
+                asyncio.ensure_future(self.fetch_tasks_for_month())
+
+            def init_calendar(self):
+                """Initializes the calendar by attaching event listeners."""
+                calendar_icon = document.getElementById("calendar-icon")
+                add_task_button = document.getElementById("add-task-btn")
+
+                if calendar_icon:
+                    def handle_calendar_click(event):
+                        calendar_popup = document.getElementById("calendar-popup")
+                        if calendar_popup.style.display == "none" or calendar_popup.style.display == "":
+                            calendar_popup.style.display = "block"
+                            document.body.classList.add("calendar-open")
+                        else:
+                            # Close tasks popup when calendar closes
+                            existing_popup = document.querySelector(".tasks-popup")
+                            if existing_popup:
+                                existing_popup.remove()
+                            calendar_popup.style.display = "none"
+                            document.body.classList.remove("calendar-open")
+                        event.stopPropagation()
+
+                    calendar_icon._toggle_proxy = create_proxy(handle_calendar_click)
+                    calendar_icon.addEventListener("click", calendar_icon._toggle_proxy)
+
+                # Add document click listener to handle clicks outside calendar
+              
+                def handle_document_click(event):
+                    calendar_popup = document.getElementById("calendar-popup")
+                    calendar_icon = document.getElementById("calendar-icon")
+                    task_modal = document.getElementById("taskModal")
+                    edit_task_modal = document.getElementById("editTaskModal")
+                    tasks_popup = document.querySelector(".tasks-popup")
+
+                    clicked_inside_popup = event.target.closest(".tasks-popup")
+                    clicked_inside_calendar = event.target.closest("#calendar-popup")
+                    clicked_inside_icon = event.target.closest("#calendar-icon")
+                    clicked_inside_modal = (
+                        event.target.closest("#taskModal") or 
+                        event.target.closest("#editTaskModal")
+                    )
+
+                    # ✅ Do nothing if clicking inside modals, calendar icon, or popup
+                    if clicked_inside_modal or clicked_inside_icon or clicked_inside_popup:
+                        return
+
+                    # ✅ If clicking inside calendar (not popup), close popup only
+                    if clicked_inside_calendar:
+                        if tasks_popup and tasks_popup.getAttribute("data-protected") != "true":
+                            tasks_popup.remove()
+                        return
+
+                    # ✅ If clicking outside everything, close both calendar and popup
+                    if calendar_popup and calendar_popup.style.display == "block":
+                        if tasks_popup:
+                            tasks_popup.remove()
+                        calendar_popup.style.display = "none"
+                        document.body.classList.remove("calendar-open")
+
+            
+
+
+                document._calendar_click_proxy = create_proxy(handle_document_click)
+                document.addEventListener("click", document._calendar_click_proxy)
+
+                if add_task_button:
+                    add_task_button._add_task_proxy = create_proxy(self.add_task)
+                    add_task_button.addEventListener("click", add_task_button._add_task_proxy)
+
+                # Initialize time selection
+                time_input = document.getElementById("task-time")
+                if time_input:
+                    time_input._toggle_dropdown_proxy = create_proxy(self.toggle_time_dropdown)
+                    time_input.addEventListener("click", time_input._toggle_dropdown_proxy)
+                    self.populate_time_dropdown()
+
+                # Initialize all-day checkbox
+                all_day_checkbox = document.getElementById("all-day-checkbox")
+                if all_day_checkbox:
+                    all_day_checkbox._toggle_time_proxy = create_proxy(self.toggle_time_input)
+                    all_day_checkbox.addEventListener("change", all_day_checkbox._toggle_time_proxy)
+
+                # Add document click listener to close time dropdown
+                document._handle_doc_click_proxy = create_proxy(self.handle_document_click)
+                document.addEventListener("click", document._handle_doc_click_proxy)
+
+                prev_btn = document.getElementById("prev-month")
+                next_btn = document.getElementById("next-month")
+
+                if prev_btn:
+                    prev_btn._prev_month_proxy = create_proxy(self.prev_month)
+                    prev_btn.addEventListener("click", prev_btn._prev_month_proxy)
+                if next_btn:
+                    next_btn._next_month_proxy = create_proxy(self.next_month)
+                    next_btn.addEventListener("click", next_btn._next_month_proxy)
+
+                self.update_calendar()
+
+            def populate_time_dropdown(self):
+                """Populates the time dropdown with 15-minute intervals."""
+                # Populate both add and edit task time dropdowns
+                for dropdown_id in ["time-dropdown", "edit-time-dropdown"]:
+                    time_list = document.querySelector(f"#{dropdown_id} .time-list")
+                    if not time_list:
+                        continue
+
+                    time_list.innerHTML = ""
+                    
+                    # Generate time slots from 12:00 AM to 11:45 PM
+                    for hour in range(24):
+                        for minute in [0, 15, 30, 45]:
+                            # Format time in 12-hour format
+                            period = "am" if hour < 12 else "pm"
+                            display_hour = hour if hour < 12 else hour - 12
+                            if display_hour == 0:
+                                display_hour = 12
+                            
+                            time_str = f"{display_hour}:{minute:02d}{period}"
+                            
+                            time_option = document.createElement("div")
+                            time_option.classList.add("time-option")
+                            time_option.textContent = time_str
+                            
+                            # Determine which time input to update
+                            time_input_id = "task-time" if dropdown_id == "time-dropdown" else "edit-task-time"
+                            time_option._select_time_proxy = create_proxy(lambda e, t=time_str, i=time_input_id: self.select_time(t, i))
+                            time_option.addEventListener("click", time_option._select_time_proxy)
+                            
+                            time_list.appendChild(time_option)
+
+            def prev_month(self, event=None):
+                """Navigate to the previous month."""
+                if self.current_month == 1:
+                    self.current_month = 12
+                    self.current_year -= 1
+                else:
+                    self.current_month -= 1
+                self.update_calendar()
+            
+            def next_month(self, event=None):
+                """Navigate to the next month."""
+                if self.current_month == 12:
+                    self.current_month = 1
+                    self.current_year += 1
+                else:
+                    self.current_month += 1
+                self.update_calendar()
+
+            def toggle_time_dropdown(self, event, dropdown_id="time-dropdown"):
+                """Shows or hides the time dropdown."""
+                if dropdown_id == "time-dropdown":
+                    if document.getElementById("all-day-checkbox").checked:
+                        return
+                else:  # edit-time-dropdown
+                    if document.getElementById("edit-all-day-checkbox").checked:
+                        return
+
+                dropdown = document.getElementById(dropdown_id)
+                dropdown.style.display = "block" if dropdown.style.display == "none" else "none"
+                event.stopPropagation()
+
+            def select_time(self, time_str, time_input_id="task-time"):
+                """Handles time selection from dropdown."""
+                time_input = document.getElementById(time_input_id)
+                time_input.value = time_str
+                
+                # Close the appropriate dropdown based on which modal is being used
+                dropdown_id = "time-dropdown" if time_input_id == "task-time" else "edit-time-dropdown"
+                document.getElementById(dropdown_id).style.display = "none"
+
+            def handle_document_click(self, event):
+                """Closes time dropdown when clicking outside."""
+                # Check both add and edit task time dropdowns
+                for dropdown_id in ["time-dropdown", "edit-time-dropdown"]:
+                    dropdown = document.getElementById(dropdown_id)
+                    if dropdown:
+                        time_input_id = "task-time" if dropdown_id == "time-dropdown" else "edit-task-time"
+                        time_input = document.getElementById(time_input_id)
+                        if dropdown and not dropdown.contains(event.target) and event.target != time_input:
+                            dropdown.style.display = "none"
+
+            def toggle_time_input(self, event, time_input_id="task-time"):
+                """Enables/disables time input based on all-day checkbox."""
+                time_input = document.getElementById(time_input_id)
+                time_input.disabled = event.target.checked
+                if event.target.checked:
+                    time_input.value = ""
+                    dropdown_id = "time-dropdown" if time_input_id == "task-time" else "edit-time-dropdown"
+                    document.getElementById(dropdown_id).style.display = "none"
+
+            def toggle_calendar_popup(self, event):
+                """Toggles the calendar popup visibility."""
+                calendar_popup = document.getElementById("calendar-popup")
+                calendar_icon = document.getElementById("calendar-icon")
+                
+                # If clicking the calendar icon
+                if calendar_icon.contains(event.target):
+                    if calendar_popup.style.display == "none" or calendar_popup.style.display == "":
+                        calendar_popup.style.display = "block"
+                        document.body.classList.add("calendar-open")  # Disable background scrolling
+                    else:
+                        calendar_popup.style.display = "none"
+                        document.body.classList.remove("calendar-open")  # Re-enable background scrolling
+                    return
+                
+                # If clicking outside the calendar popup and icon
+                if not calendar_popup.contains(event.target) and not calendar_icon.contains(event.target):
+                    if calendar_popup.style.display == "block":
+                        calendar_popup.style.display = "none"
+                        document.body.classList.remove("calendar-open")  # Re-enable background scrolling
+                    return
+
+            def open_task_modal(self, event):
+                selected_date = event.currentTarget.dataset.date
+                document.getElementById("selected-date").innerText = selected_date
+                document.getElementById("task-input").value = ""
+                document.getElementById("selected-category-label").innerText = ""
+                document.getElementById("taskModal").style.display = "flex"
+
+
+
+            def close_task_modal(self, event=None):
+                """Closes the task modal."""
+                document.getElementById("taskModal").style.display = "none"
+
             def on_message(self, event):
                 js_data = window.JSON.parse(event.data)
                 data = dict(js_data.to_py())
                 if data["action"] == "update":
                     self.update_online_members(data["online_users"])
-            
+
+            def on_task_message(self, event):
+                """Handle real-time task updates."""
+                console.log("📩 Received task WebSocket message:", event.data)
+                js_data = window.JSON.parse(event.data)
+                data = dict(js_data.to_py())
         
+                if data["action"] == "new_task":
+                    self.display_task(data["task"])
+                elif data["action"] == "task_update":
+                    # Handle task updates (modifications or deletions)
+                    self.update_task_display(data["task"])
+                elif data["action"] == "task_delete":
+                    # Handle task deletions
+                    self.remove_task_display(data["task_id"])
+
+            def update_task_display(self, task):
+                """Update an existing task in the calendar."""
+                task_date = task["date"]
+                task_list_id = f"task-list-{task_date}"
+                task_list = document.getElementById(task_list_id)
+
+                # ✅ Ensure the date key exists in internal data
+                if task_date not in self.task_data_by_date:
+                    self.task_data_by_date[task_date] = []
+
+                # ✅ Replace or append the task in the internal data
+                updated = False
+                for i, existing in enumerate(self.task_data_by_date[task_date]):
+                    if existing["id"] == task["id"]:
+                        self.task_data_by_date[task_date][i] = task  # Replace with updated
+                        updated = True
+                        break
+
+                if not updated:
+                    self.task_data_by_date[task_date].append(task)
+
+                # ✅ Get or create task list
+                if not task_list:
+                    task_list = document.createElement("ul")
+                    task_list.id = task_list_id
+                    task_list.classList.add("task-list")
+                    day_cell = document.querySelector(f".calendar-day[data-date='{task_date}']")
+                    if day_cell:
+                        day_cell.appendChild(task_list)
+
+                # ✅ Re-render first 2 tasks
+                task_list.innerHTML = ""
+                visible_tasks = self.task_data_by_date[task_date][:2]
+                for visible_task in visible_tasks:
+                    task_item = document.createElement("li")
+                    task_item.style.backgroundColor = visible_task.get("color", "#888")
+                    task_item.title = visible_task["description"]
+                    task_item.dataset.taskId = visible_task["id"]
+                    task_item.style.cursor = "pointer"
+
+                    if visible_task.get("is_all_day"):
+                        task_item.classList.add("all-day-task")
+                        task_item.textContent = visible_task["description"]
+                    else:
+                        time_span = document.createElement("span")
+                        time_span.classList.add("task-time")
+                        time_span.textContent = visible_task.get("time", "")
+                        desc_span = document.createElement("span")
+                        desc_span.textContent = visible_task["description"]
+                        task_item.appendChild(time_span)
+                        task_item.appendChild(desc_span)
+
+                    # Add click handler for editing
+                    def handle_click(e, t=visible_task):
+                        e.stopPropagation()
+                        self.open_edit_task_modal(t)
+
+                    task_item._edit_task_proxy = create_proxy(handle_click)
+                    task_item.addEventListener("click", task_item._edit_task_proxy)
+                    task_list.appendChild(task_item)
+
+                # ✅ Update "+X more" indicator
+                day_cell = document.querySelector(f".calendar-day[data-date='{task_date}']")
+                if day_cell:
+                    self.update_more_indicator(task_date, day_cell)
+
+
+            def remove_task_display(self, task_id):
+                """Remove task from calendar, popup, and internal data."""
+
+                found_date = None
+
+                # ✅ 1. Remove from calendar day box and locate its date
+                task_lists = document.querySelectorAll(".task-list")
+                for task_list in task_lists:
+                    for task_item in task_list.children:
+                        if task_item.dataset.taskId == task_id:
+                            # ✅ Get the date either from calendar or dataset
+                            if task_item.closest(".calendar-day"):
+                                found_date = task_item.closest(".calendar-day").dataset.date
+                            else:
+                                # ✅ Access JS dataset safely
+                                found_date = task_item.getAttribute("data-date")
+
+
+                            task_list.removeChild(task_item)
+                            break
+
+
+                # ✅ 2. Remove from internal task data
+                if found_date and found_date in self.task_data_by_date:
+                    self.task_data_by_date[found_date] = [
+                        t for t in self.task_data_by_date[found_date] if t["id"] != task_id
+                    ]
+
+                    # ✅ 3. Re-render the calendar cell to update day box + "+X more"
+                    day_cell = document.querySelector(f".calendar-day[data-date='{found_date}']")
+                    if day_cell:
+                        self._refresh_day_cell(found_date, day_cell)
+
+                # ✅ 4. Remove from task list popup (if open)
+                popup = document.querySelector(".tasks-popup")
+                if popup:
+                    for li in popup.querySelectorAll("li"):
+                        if li.dataset.taskId == task_id:
+                            li.remove()
+
+                    # ✅ Close popup if no tasks left
+                    if len(popup.querySelectorAll("li")) == 0:
+                        popup.remove()
+
+            def _refresh_day_cell(self, date_str, day_cell):
+                """Re-renders a single day cell (task list + +X more)"""
+                task_list = day_cell.querySelector(".task-list")
+                if not task_list:
+                    return
+
+                # Clear tasks
+                task_list.innerHTML = ""
+
+                # Show up to 2 tasks
+                visible_tasks = self.task_data_by_date.get(date_str, [])[:2]
+                for task in visible_tasks:
+                    task_item = document.createElement("li")
+                    task_item.style.backgroundColor = task.get("color", "#888")
+                    task_item.title = task["description"]
+                    task_item.dataset.taskId = task["id"]
+                    task_item.style.cursor = "pointer"
+
+                    if task.get("is_all_day"):
+                        task_item.classList.add("all-day-task")
+                        task_item.textContent = task["description"]
+                    else:
+                        time_span = document.createElement("span")
+                        time_span.classList.add("task-time")
+                        time_span.textContent = task.get("time", "")
+                        desc_span = document.createElement("span")
+                        desc_span.textContent = task["description"]
+                        task_item.appendChild(time_span)
+                        task_item.appendChild(desc_span)
+
+                    # Add click to edit modal
+                    def handle_task_click(event, t=task):
+                        event.stopPropagation()
+                        self.open_edit_task_modal(t)
+
+                    task_item._edit_task_proxy = create_proxy(handle_task_click)
+                    task_item.addEventListener("click", task_item._edit_task_proxy)
+                    task_list.appendChild(task_item)
+
+                # ✅ Update +X more indicator
+                self.update_more_indicator(date_str, day_cell)
+
+
+            def display_task(self, task):
+                task_date = task["date"]
+                task_list_id = f"task-list-{task_date}"
+                day_cell = document.querySelector(f".calendar-day[data-date='{task_date}']")
+
+                if not day_cell:
+                    console.log(f"❌ No matching calendar cell found for {task_date}")
+                    return
+
+                # ✅ Initialize task_data_by_date if missing
+                if not hasattr(self, "task_data_by_date"):
+                    self.task_data_by_date = {}
+
+                # ✅ Ensure list exists
+                if task_date not in self.task_data_by_date:
+                    self.task_data_by_date[task_date] = []
+
+                # ✅ Avoid duplicate task
+                if not any(existing["id"] == task["id"] for existing in self.task_data_by_date[task_date]):
+                    self.task_data_by_date[task_date].append(task)
+
+                # ✅ Get or create task list element
+                task_list = document.getElementById(task_list_id)
+                if not task_list:
+                    task_list = document.createElement("ul")
+                    task_list.id = task_list_id
+                    task_list.classList.add("task-list")
+                    day_cell.appendChild(task_list)
+
+                # ✅ Clear and render first 2 tasks only
+                task_list.innerHTML = ""
+                visible_tasks = self.task_data_by_date[task_date][:2]
+                for visible_task in visible_tasks:
+                    task_item = document.createElement("li")
+                    task_item.style.backgroundColor = visible_task.get("color", "#888")
+                    task_item.title = visible_task["description"]
+                    task_item.dataset.taskId = visible_task["id"]
+                    task_item.style.cursor = "pointer"  # Add pointer cursor
+
+                    if visible_task.get("is_all_day"):
+                        task_item.classList.add("all-day-task")
+                        task_item.textContent = visible_task["description"]
+                    else:
+                        time_span = document.createElement("span")
+                        time_span.classList.add("task-time")
+                        time_span.textContent = visible_task.get("time", "")
+                        desc_span = document.createElement("span")
+                        desc_span.textContent = visible_task["description"]
+                        task_item.appendChild(time_span)
+                        task_item.appendChild(desc_span)
+
+                    # Add click handler for editing
+                    task_item._edit_task_proxy = create_proxy(lambda e, t=visible_task: self.open_edit_task_modal(t))
+                    task_item.addEventListener("click", task_item._edit_task_proxy)
+                    task_list.appendChild(task_item)
+
+                # ✅ Add or update +X more indicator
+                self.update_more_indicator(task_date, day_cell)
+
+
+            def update_more_indicator(self, task_date, day_cell):
+                all_tasks = self.task_data_by_date.get(task_date, [])
+                more_count = len(all_tasks) - 2
+                existing_more = day_cell.querySelector(".more-tasks")
+            
+                if more_count <= 0:
+                    if existing_more:
+                        existing_more.remove()
+                    return
+            
+                if existing_more:
+                    existing_more.remove()
+            
+                more_indicator = document.createElement("div")
+                more_indicator.classList.add("more-tasks")
+                more_indicator.textContent = f"+{more_count} more"
+                more_indicator._tasks = all_tasks
+                more_indicator._day_cell = day_cell
+            
+                more_indicator.addEventListener("click", self.more_click_proxy)
+                day_cell.appendChild(more_indicator)
+            
+            
+            
+
+            def _on_more_click(self, event):
+                console.log("🟢 +X More clicked")
+                indicator = event.currentTarget
+                if hasattr(indicator, "_tasks") and hasattr(indicator, "_day_cell"):
+                    self.show_tasks_popup(event, indicator._tasks, indicator._day_cell)
+                else:
+                    console.log("❌ Missing task data in more indicator")
+            
+            
+            
+            
+            
+
+            def show_tasks_popup(self, event, tasks, day_cell):
+                console.log("📅 Showing popup with tasks:", tasks)
+
+                # ✅ Only stop propagation if event is not None
+                if event:
+                    event.stopPropagation()
+
+                # Remove existing popup
+                existing_popup = document.querySelector(".tasks-popup")
+                if existing_popup:
+                    existing_popup.remove()
+
+                # === Create popup ===
+                popup = document.createElement("div")
+                popup.classList.add("tasks-popup")
+                
+                # Prevent clicks within popup from bubbling up
+                popup.addEventListener("click", lambda e: e.stopPropagation())
+
+                # === Date header ===
+                header = document.createElement("h3")
+                try:
+                    date_obj = datetime.datetime.strptime(tasks[0]["date"], "%Y-%m-%d")
+                except Exception as e:
+                    console.log(f"❌ Error parsing date: {e}")
+                    return
+
+                header.textContent = date_obj.strftime("%B %d, %Y")
+                popup.appendChild(header)
+
+                # === Close button ===
+                close_btn = document.createElement("span")
+                close_btn.classList.add("close-popup")
+                close_btn.innerHTML = "×"
+
+                # ✅ Save proxy persistently to avoid GC error and prevent propagation
+                def close_popup(e):
+                    e.stopPropagation()
+                    popup.remove()
+                    
+                self._popup_close_btn_proxy = create_proxy(close_popup)
+                close_btn.addEventListener("click", self._popup_close_btn_proxy)
+                popup.appendChild(close_btn)
+
+                # === Task list ===
+                task_list = document.createElement("ul")
+                task_list.classList.add("task-list")
+
+                sorted_tasks = sorted(tasks, key=lambda x: (
+                    not x.get("is_all_day", False),
+                    x.get("time", "23:59pm")
+                ))
+
+                for task in sorted_tasks:
+                    task_item = document.createElement("li")
+                    task_item.style.backgroundColor = task.get("color", "#888")
+                    task_item.style.cursor = "pointer"
+                    task_item.dataset.taskId = task["id"]  # ✅ Make task removable by ID
+                    task_item.setAttribute("data-date", task["date"])  # ✅ Standard HTML attribute
+
+
+                
+                    if task.get("is_all_day"):
+                        task_item.classList.add("all-day-task")
+                        task_item.textContent = task["description"]
+                    else:
+                        time_span = document.createElement("span")
+                        time_span.classList.add("task-time")
+                        time_span.textContent = task.get("time", "")
+                        desc_span = document.createElement("span")
+                        desc_span.textContent = task["description"]
+                        task_item.appendChild(time_span)
+                        task_item.appendChild(desc_span)
+                
+                    # ✅ Prevent calendar from closing when clicking task
+                    def handle_task_click(event, t=task):
+                        event.stopPropagation()
+                        self.open_edit_task_modal(t)
+                
+                    task_item._edit_task_proxy = create_proxy(handle_task_click)
+                    task_item.addEventListener("click", task_item._edit_task_proxy)
+                
+                    task_list.appendChild(task_item)
+            
+
+                popup.appendChild(task_list)
+                document.body.appendChild(popup)
+
+                # === Style the popup ===
+                popup.style.position = "absolute"
+                popup.style.display = "block"
+                popup.style.visibility = "visible"
+                popup.style.backgroundColor = "#fff"
+                popup.style.padding = "10px"
+                popup.style.border = "1px solid #ccc"
+                popup.style.borderRadius = "8px"
+                popup.style.boxShadow = "0 4px 8px rgba(0, 0, 0, 0.1)"
+                popup.style.zIndex = "1000"
+                popup.style.minWidth = "200px"
+
+                # === Positioning ===
+                rect = day_cell.getBoundingClientRect()
+                popup.style.left = f"{rect.left + window.pageXOffset}px"
+                popup.style.top = f"{rect.bottom + window.pageYOffset + 5}px"
+
+                console.log("📍 Popup position:", popup.getBoundingClientRect())
+
+            def open_edit_task_modal(self, task_data):
+                if hasattr(task_data, "to_py"):
+                    task_data = task_data.to_py()
+            
+                document.getElementById("edit-task-id").value = task_data["id"]
+                document.getElementById("edit-task-input").value = task_data["description"]
+                document.getElementById("edit-selected-date").textContent = task_data["date"]
+            
+                all_day_checkbox = document.getElementById("edit-all-day-checkbox")
+                time_input = document.getElementById("edit-task-time")
+            
+                all_day_checkbox.checked = task_data.get("is_all_day", False)
+                time_input.value = task_data.get("time", "") or ""
+                time_input.disabled = all_day_checkbox.checked
+            
+                # Reset and select the correct color
+                color_options = document.querySelectorAll("#edit-color-picker .color-option")
+                for option in color_options:
+                    option.classList.remove("selected")
+                    if option.getAttribute("data-color") == task_data.get("color"):
+                        option.classList.add("selected")
+                        document.getElementById("edit-selected-category-label").innerText = f"Selected: {option.getAttribute('data-label')}"
+            
+                document.getElementById("task-complete-checkbox").checked = False
+            
+             
+            
+                document.getElementById("editTaskModal").style.display = "flex"
+            
+            def refresh_tasks_popup(self, date_str, from_edit_modal=False):
+                """Re-renders the task popup for a specific date."""
+                existing_popup = document.querySelector(".tasks-popup")
+                if existing_popup:
+                    existing_popup.remove()
+
+                if date_str not in self.task_data_by_date:
+                    return
+
+                day_cell = document.querySelector(f".calendar-day[data-date='{date_str}']")
+                if day_cell:
+                    self.show_tasks_popup(None, self.task_data_by_date[date_str], day_cell)
+
+                # ✅ Set a custom attribute to indicate this was refreshed from edit modal
+                if from_edit_modal:
+                    new_popup = document.querySelector(".tasks-popup")
+                    if new_popup:
+                        new_popup.setAttribute("data-protected", "true")
+
+
+
+            async def update_task(self, event=None):
+                """Updates an existing task with new details or marks it as complete."""
+                if event:
+                    event.stopPropagation()
+
+                task_id = document.getElementById("edit-task-id").value
+                task_input = document.getElementById("edit-task-input").value.strip()
+                selected_date = document.getElementById("edit-selected-date").textContent
+                is_complete = document.getElementById("task-complete-checkbox").checked
+                
+                if not task_input:
+                    console.log("⚠️ Task cannot be empty.")
+                    return
+                
+                # Get time information
+                is_all_day = document.getElementById("edit-all-day-checkbox").checked
+                selected_time = document.getElementById("edit-task-time").value if not is_all_day else None
+                
+                # Get selected color
+                selected_color = None
+                selected_label = None
+                color_option = document.querySelector("#edit-color-picker .color-option.selected")
+                if color_option:
+                    selected_color = color_option.getAttribute("data-color")
+                    selected_label = color_option.getAttribute("data-label")
+                
+                task_payload = {
+                    "task_id": task_id,
+                    "project_code": self.project_code,
+                    "date": selected_date,
+                    "task": task_input,
+                    "user": self.username,
+                    "color": selected_color,
+                    "label": selected_label,
+                    "time": selected_time,
+                    "is_all_day": is_all_day,
+                    "is_complete": is_complete
+                }
+                
+                try:
+                    response = await pyfetch(
+                        "/update_task",
+                        method="POST",
+                        body=json.dumps(task_payload),
+                        headers={"Content-Type": "application/json"}
+                    )
+                    result = await response.json()
+                    console.log("✅ Task updated:", result)
+                    
+                    # If task is marked as complete, remove it from display
+                    if is_complete:
+                        self.remove_task_display(task_id)
+                    else:
+                        # Update the task in the calendar
+                        self.update_task_display(result["task"])
+                         # ✅ Delay popup refresh to avoid global click removing it
+                        def delayed_refresh():
+                            self.refresh_tasks_popup(result["task"]["date"], from_edit_modal=True)
+                        
+                        window.setTimeout(create_proxy(delayed_refresh), 10)
+
+
+
+                    
+                except Exception as e:
+                    console.log(f"❌ Failed to update task: {e}")
+                
+                # ✅ Hide only the edit modal (not taskModal!)
+                document.getElementById("editTaskModal").style.display = "none"
+                document.getElementById("task-complete-checkbox").checked = False
+
+                # ✅ Make sure taskModal is hidden in case it was visible
+                document.getElementById("taskModal").style.display = "none"
+
+                # ✅ Bring back calendar properly
+                calendar_popup = document.getElementById("calendar-popup")
+                if calendar_popup:
+                    calendar_popup.style.display = "block"
+                    document.body.classList.add("calendar-open")
+
+
+            def init_edit_task_handlers(self):
+                """Initialize event handlers for the edit task modal."""
+                # Color picker in edit modal
+                edit_color_picker = document.getElementById("edit-color-picker")
+                if edit_color_picker:
+                    for el in edit_color_picker.querySelectorAll(".color-option"):
+                        el.addEventListener("click", create_proxy(self.select_edit_color))
+                
+                # Update button
+                update_btn = document.getElementById("update-task-btn")
+                if update_btn:
+                    update_btn._update_task_proxy = create_proxy(self.update_task)
+                    update_btn.addEventListener("click", update_btn._update_task_proxy)
+                
+                # Time input in edit modal
+                edit_time_input = document.getElementById("edit-task-time")
+                if edit_time_input:
+                    edit_time_input._toggle_dropdown_proxy = create_proxy(
+                        lambda e: self.toggle_time_dropdown(e, "edit-time-dropdown")
+                    )
+                    edit_time_input.addEventListener("click", edit_time_input._toggle_dropdown_proxy)
+                
+                # All-day checkbox in edit modal
+                edit_all_day = document.getElementById("edit-all-day-checkbox")
+                if edit_all_day:
+                    edit_all_day._toggle_time_proxy = create_proxy(
+                        lambda e: self.toggle_time_input(e, "edit-task-time")
+                    )
+                    edit_all_day.addEventListener("change", edit_all_day._toggle_time_proxy)
+
+            def select_edit_color(self, event):
+                """Handles color selection in the edit task modal."""
+                for el in document.querySelectorAll("#edit-color-picker .color-option"):
+                    el.classList.remove("selected")
+                event.target.classList.add("selected")
+                selected_label = event.target.getAttribute("data-label")
+                document.getElementById("edit-selected-category-label").innerText = f"Selected: {selected_label}"
+
             def on_close(self, event):
                 console.log("\u274c WebSocket closed. Reconnecting...")
                 setTimeout(lambda: asyncio.ensure_future(self.connect_websocket()), 1000)
@@ -463,16 +1207,92 @@
                     status_indicator = document.createElement("div")
                     status_indicator.classList.add("status-indicator")
         
-                    seat.appendChild(profile_pic)
-                    seat.appendChild(status_indicator)
-                    seating_area.appendChild(seat)
-            
+                    # Add name label
+                    name_label = document.createElement("div")
+                    name_label.classList.add("member-name")
+                    name_label.textContent = member
         
+                    profile_pic.appendChild(status_indicator)
+                    seat.appendChild(profile_pic)
+                    seat.appendChild(name_label)
+                    seating_area.appendChild(seat)
+
+            
+
+                        
+            
+            def select_color(self, event):
+                for el in document.querySelectorAll(".color-option"):
+                    el.classList.remove("selected")
+                event.target.classList.add("selected")
+                self.selected_color = event.target.getAttribute("data-color")
+                selected_label = event.target.getAttribute("data-label")
+                document.getElementById("selected-category-label").innerText = f"Selected: {selected_label}"
+                self.selected_label = selected_label  # Store for sending in task
+
+
+            async def add_task(self, event=None):
+                if event:
+                    event.stopPropagation()  # Prevent event from bubbling up to document
+                task_input = document.getElementById("task-input").value.strip()
+                selected_date_raw = document.getElementById("selected-date").textContent
+                date_parts = selected_date_raw.split("-")
+                selected_date = f"{int(date_parts[0]):04}-{int(date_parts[1]):02}-{int(date_parts[2]):02}"
+            
+                if not task_input:
+                    console.log("⚠️ Task cannot be empty.")
+                    return
+            
+                # Get time information
+                is_all_day = document.getElementById("all-day-checkbox").checked
+                selected_time = document.getElementById("task-time").value if not is_all_day else None
+                
+                task_payload = {
+                    "project_code": self.project_code,
+                    "date": selected_date,
+                    "task": task_input,
+                    "user": self.username,
+                    "color": self.selected_color,
+                    "label": self.selected_label,
+                    "time": selected_time,
+                    "is_all_day": is_all_day
+                }
+            
+                try:
+                    response = await pyfetch(
+                        "/add_task",
+                        method="POST",
+                        body=json.dumps(task_payload),
+                        headers={"Content-Type": "application/json"}
+                    )
+                    result = await response.json()
+                    console.log("✅ Task saved to backend:", result)
+            
+                except Exception as e:
+                    console.log(f"❌ Failed to send task to backend: {e}")
+            
+                document.getElementById("task-input").value = ""
+                document.getElementById("task-time").value = ""
+                document.getElementById("all-day-checkbox").checked = False
+                document.getElementById("taskModal").style.display = "none"
+
+            async def fetch_tasks_for_month(self):
+                url = f"/get_tasks_for_month/{self.project_code}/{self.current_year}/{self.current_month}"
+                try:
+                    response = await pyfetch(url)
+                    data = await response.json()
+                    for task in data["tasks"]:
+                        self.display_task(task)
+                    console.log("✅ Loaded tasks for the month")
+                except Exception as e:
+                    console.log(f"❌ Failed to fetch tasks: {e}")
+                
         project_code = "{{ project.code }}"
         username = "{{ user }}"
         hub = ProjectHub(project_code, username)
         asyncio.ensure_future(hub.connect_websocket())
-        selected_chat_id = None  
+        selected_chat_id = None 
+        hub.update_calendar() 
         
         async def fetch_channels():
             """
@@ -598,14 +1418,21 @@
             cancel_modal_btn = document.getElementById("cancel-modal-btn")
         
             if add_channel_button:
-                add_channel_button.addEventListener("click", openModal_proxy)
+                add_channel_button._open_modal_proxy = openModal_proxy
+                add_channel_button.addEventListener("click", add_channel_button._open_modal_proxy)
+            
             if create_channel_btn:
-                create_channel_btn.addEventListener("click", addChannel_proxy)
+                create_channel_btn._add_channel_proxy = addChannel_proxy
+                create_channel_btn.addEventListener("click", create_channel_btn._add_channel_proxy)
+            
             if cancel_modal_btn:
-                cancel_modal_btn.addEventListener("click", closeModal_proxy)
+                cancel_modal_btn._close_modal_proxy = closeModal_proxy
+                cancel_modal_btn.addEventListener("click", cancel_modal_btn._close_modal_proxy)
         
         # Wait for DOM to load before setting up event listeners
-        setTimeout(create_proxy(setup_event_listeners), 100)
+        setup_event_listeners_proxy = create_proxy(setup_event_listeners)
+        setTimeout(setup_event_listeners_proxy, 100)
+
         asyncio.ensure_future(fetch_channels())
 
         
@@ -624,15 +1451,19 @@
             manage_members_btn = dropdown_menu.querySelector("li:nth-child(2)")  # Manage Members
 
             if rename_btn:
-                rename_btn.addEventListener("click", create_proxy(open_rename_modal))
+                rename_btn._rename_modal_proxy = create_proxy(open_rename_modal)
+                rename_btn.addEventListener("click", rename_btn._rename_modal_proxy)
                 console.log("✅ Rename modal event attached!")
 
             if manage_members_btn:
-                manage_members_btn.addEventListener("click", create_proxy(open_manage_members_modal))
+                manage_members_btn._manage_members_proxy = create_proxy(open_manage_members_modal)
+                manage_members_btn.addEventListener("click", manage_members_btn._manage_members_proxy)
                 console.log("✅ Manage members modal event attached!")
 
         # Run the setup once the DOM loads
-        setTimeout(create_proxy(setup_modal_listeners), 100)
+        setup_modal_listeners_proxy = create_proxy(setup_modal_listeners)
+        setTimeout(setup_modal_listeners_proxy, 100)
+
 
 
         def show_chat_dropdown(event, chat_id):
@@ -640,8 +1471,8 @@
             Displays the dropdown menu when the user right-clicks on a chat.
             """
             global selected_chat_id
-            selected_chat_id = chat_id  # ✅ Store selected chat ID
-            event.preventDefault()  # Prevent default right-click menu
+            selected_chat_id = chat_id
+            event.preventDefault()
 
             dropdown = document.getElementById("chat-dropdown")
             dropdown.style.display = "block"
@@ -655,7 +1486,8 @@
                 dropdown.style.display = "none"
                 console.log("🔴 Dropdown closed.")
 
-            document.addEventListener("click", create_proxy(hide_dropdown), {"once": True})
+            dropdown._hide_dropdown_proxy = create_proxy(hide_dropdown)
+            document.addEventListener("click", dropdown._hide_dropdown_proxy, {"once": True})
 
         def open_rename_modal(event=None):
             """
@@ -719,19 +1551,35 @@
             """
             Closes the specified modal and hides the overlay.
             """
+            if event:
+                event.stopPropagation()
             button = event.target
             modal_id = button.getAttribute("data-modal")  # Get modal ID from button data attribute
         
             if modal_id:
                 modal = document.getElementById(modal_id)
-                overlay = document.getElementById("overlay")
-        
                 if modal:
                     modal.style.display = "none"
-                if overlay:
-                    overlay.style.display = "none"
         
-                console.log(f"🔴 Modal {modal_id} closed.")
+                # Always hide both modals to prevent overlap
+                document.getElementById("taskModal").style.display = "none"
+                document.getElementById("editTaskModal").style.display = "none"
+        
+                if modal_id in ["renameModal", "manageMembersModal", "channelModal"]:
+                    document.getElementById("overlay").style.display = "none"
+                elif modal_id == "editTaskModal":
+                    # Just show the calendar again if edit modal was closed
+                    calendar_popup = document.getElementById("calendar-popup")
+                    if calendar_popup:
+                        calendar_popup.style.display = "block"
+                        document.body.classList.add("calendar-open")
+                elif modal_id == "taskModal":
+                    # Task modal closed, ensure overlay is hidden
+                    document.getElementById("overlay").style.display = "none"
+        
+            console.log(f"🔴 Modal {modal_id} closed.")
+        
+        
         
         
         def attach_cancel_events():
@@ -741,9 +1589,12 @@
             cancel_buttons = document.querySelectorAll(".cancel-modal-btn")
             
             for btn in cancel_buttons:
-                btn.addEventListener("click", create_proxy(close_modal))
+                btn._close_modal_proxy = create_proxy(close_modal)
+                btn.addEventListener("click", btn._close_modal_proxy)
             
-        setTimeout(create_proxy(attach_cancel_events), 100)
+        attach_cancel_events_proxy = create_proxy(attach_cancel_events)
+        setTimeout(attach_cancel_events_proxy, 100)
+
             
         
         async def fetch_chat_members():
@@ -851,6 +1702,10 @@
             else:
                 details_div.style.display = "none"
                 toggle_btn.classList.remove("open")  # Reset rotation
+
+        
+
+
                         
         
     </py-script>

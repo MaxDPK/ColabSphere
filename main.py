@@ -11,7 +11,8 @@ import base64
 import json
 from pydantic import BaseModel
 import transaction
-
+import uuid
+import datetime
 
 app = FastAPI()
 
@@ -24,6 +25,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Track online users and WebSocket connections per project
 online_users: Dict[str, set] = {}
 project_connections: Dict[str, List[WebSocket]] = {}
+task_connections: Dict[str, List[WebSocket]] = {}
+recent_projects_store = {}
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
@@ -64,29 +67,19 @@ async def signup_page(request: Request):
 
 @app.post("/signup")
 async def signup(request: Request, username: str = Form(...), password: str = Form(...), confirm_password: str = Form(...)):
-    # Check if password and confirm password match
     if password != confirm_password:
-        return templates.TemplateResponse("signup.html", {
-            "request": request,
-            "signup": True,
-            "error_message": "Passwords do not match. Please try again."
-        })
-    
-    # Check if the user already exists
+        return JSONResponse(content={"error": "Passwords do not match."}, status_code=400)
+
     if db.get_user(username):
-        return templates.TemplateResponse("signup.html", {
-            "request": request,
-            "signup": True,
-            "error_message": "User already exists. Please try a different username."
-        })
-    
-    # Proceed with adding the user if passwords match and username is available
+        return JSONResponse(content={"error": "User already exists."}, status_code=400)
+
     if db.add_user(username, password):
-        response = RedirectResponse(f"/choose_profile_pic?user={username}", status_code=303)
-        response.set_cookie(key="user", value=username)  # ✅ Set user cookie after signup
-        return response
-    
-    return "An unexpected error occurred."
+        return JSONResponse(content={"message": "Signup successful!", "user": username})
+
+    return JSONResponse(content={"error": "An unexpected error occurred."}, status_code=500)
+
+
+
 
 
 
@@ -130,7 +123,7 @@ async def menu(request: Request, user: str):
 
     projects = db.get_user_projects(user_data.username)
     profile_pic = "/static/profile_pics/default.png"  # Default image
-
+    
     if user_data.profile_pic_data:
         try:
             # Convert binary image data to Base64
@@ -149,9 +142,13 @@ async def menu(request: Request, user: str):
         except Exception as e:
             print("Error converting profile picture:", e)
 
+    recent_projects = recent_projects_store.get(user, [])[:3]
+     # ✅ Fix: Set `project` as an empty dictionary if no projects exist
+    project = projects[0] if projects else {"code": ""}
+
     return templates.TemplateResponse(
         "menu.html",
-        {"request": request, "projects": projects, "user": user, "profile_pic": profile_pic}
+        {"request": request, "projects": projects, "user": user, "profile_pic": profile_pic, "recent_projects": recent_projects, "project": project}
     )
 
 
@@ -193,9 +190,23 @@ async def project_hub(request: Request, project_code: str, user: str):
     if user not in project.members:
         return "You are not a member of this project"
     
+    
     if not any(chat.chat_id == "general1" for chat in project.chats):
         project.create_general_chat()
 
+
+    # ✅ Update the recent projects list for the user
+    if user not in recent_projects_store:
+        recent_projects_store[user] = []
+    
+    # Remove existing entry if project is already in the list
+    recent_projects_store[user] = [p for p in recent_projects_store[user] if p["code"] != project_code]
+
+    # Add the project to the top of the recent list
+    recent_projects_store[user].insert(0, {"name": project.name, "code": project.code})
+
+    # Keep only the last 3 projects
+    recent_projects_store[user] = recent_projects_store[user][:3]
     
     return templates.TemplateResponse("project_hub.html", {
         "request": request,
@@ -204,6 +215,11 @@ async def project_hub(request: Request, project_code: str, user: str):
         "user": user
     })
 
+@app.get("/get_recent_projects")
+async def get_recent_projects(user: str):
+    """Returns the user's recent projects dynamically."""
+    recent_projects = recent_projects_store.get(user, [])[:3]
+    return JSONResponse(content={"recent_projects": recent_projects})
 
 
 @app.websocket("/ws/{project_code}")
@@ -248,6 +264,23 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
         # ✅ Notify remaining clients about updated online users
         await notify_project_users(project_code)
 
+
+@app.websocket("/ws/tasks/{project_code}")
+async def websocket_task_endpoint(websocket: WebSocket, project_code: str):
+    """Handles WebSocket connections for real-time task updates."""
+    await websocket.accept()
+
+    if project_code not in task_connections:
+        task_connections[project_code] = []
+    task_connections[project_code].append(websocket)
+
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        task_connections[project_code].remove(websocket)
+        if not task_connections[project_code]:
+            del task_connections[project_code]
 
 
 async def notify_project_users(project_code: str):
@@ -621,3 +654,205 @@ async def update_chat_members(data: dict = Body(...)):
     return {"message": "Chat members updated successfully"}
 
 
+
+
+@app.post("/add_task")
+async def add_task(
+    request: Request,
+    project_code: str = Body(...),
+    date: str = Body(...),
+    task: str = Body(...),
+    user: str = Body(...),
+    color: str = Body("#888"),
+    label: str = Body("General"),
+    time: str = Body(None),
+    is_all_day: bool = Body(False)
+):
+    """Add a task and notify connected WebSocket clients."""
+    project = db.get_project(project_code)
+    if not project:
+        return JSONResponse(content={"error": "Project not found"}, status_code=404)
+
+    task_entry = {
+        "id": str(uuid.uuid4()),
+        "date": date,
+        "description": task,
+        "user": user,
+        "color": color,
+        "label": label,
+        "time": time,
+        "is_all_day": is_all_day
+    }
+
+    if not hasattr(project, "tasks"):
+        project.tasks = {}
+
+    if date not in project.tasks:
+        project.tasks[date] = []
+
+    # Sort tasks by time
+    project.tasks[date].append(task_entry)
+    if not is_all_day:
+        project.tasks[date].sort(key=lambda x: (
+            x.get("is_all_day", False),  # All-day tasks first
+            x.get("time", "23:59pm")     # Then sort by time
+        ))
+
+    project._p_changed = True
+    transaction.commit()
+
+    # Notify all connected clients about the new task
+    if project_code in task_connections:
+        for connection in task_connections[project_code]:
+            try:
+                await connection.send_json({
+                    "action": "new_task",
+                    "task": task_entry
+                })
+            except Exception as e:
+                print(f"WebSocket error: {e}")
+                task_connections[project_code].remove(connection)
+
+    return JSONResponse(content={"message": "Task added successfully", "task": task_entry})
+
+@app.post("/update_task")
+async def update_task(
+    request: Request,
+    project_code: str = Body(...),
+    task_id: str = Body(...),
+    date: str = Body(...),
+    task: str = Body(...),
+    color: str = Body("#888"),
+    label: str = Body("General"),
+    time: str = Body(None),
+    is_all_day: bool = Body(False),
+    is_complete: bool = Body(False)  # ✅ Add this to detect if task is marked complete
+):
+    """Update or complete an existing task and notify all team members."""
+    project = db.get_project(project_code)
+    if not project:
+        return JSONResponse(content={"error": "Project not found"}, status_code=404)
+
+    if not hasattr(project, "tasks") or date not in project.tasks:
+        return JSONResponse(content={"error": "Task not found"}, status_code=404)
+
+    # === ✅ If task is marked complete, delete it ===
+    if is_complete:
+        project.tasks[date] = [t for t in project.tasks[date] if t["id"] != task_id]
+        project._p_changed = True
+        transaction.commit()
+
+        # Broadcast task deletion
+        if project_code in task_connections:
+            for connection in task_connections[project_code]:
+                try:
+                    await connection.send_json({
+                        "action": "task_delete",
+                        "task_id": task_id
+                    })
+                except Exception as e:
+                    print(f"WebSocket error: {e}")
+                    task_connections[project_code].remove(connection)
+
+        return JSONResponse(content={"message": "Task marked complete and deleted"})
+
+    # === ✅ Else, perform regular task update ===
+    for task_entry in project.tasks[date]:
+        if task_entry["id"] == task_id:
+            task_entry.update({
+                "description": task,
+                "color": color,
+                "label": label,
+                "time": time,
+                "is_all_day": is_all_day
+            })
+
+            if not is_all_day:
+                project.tasks[date].sort(key=lambda x: (
+                    x.get("is_all_day", False),
+                    x.get("time", "23:59pm")
+                ))
+
+            project._p_changed = True
+            transaction.commit()
+
+            if project_code in task_connections:
+                for connection in task_connections[project_code]:
+                    try:
+                        await connection.send_json({
+                            "action": "task_update",
+                            "task": task_entry
+                        })
+                    except Exception as e:
+                        print(f"WebSocket error: {e}")
+                        task_connections[project_code].remove(connection)
+
+            return JSONResponse(content={"message": "Task updated successfully", "task": task_entry})
+
+    return JSONResponse(content={"error": "Task not found"}, status_code=404)
+
+
+@app.post("/delete_task")
+async def delete_task(
+    request: Request,
+    project_code: str = Body(...),
+    task_id: str = Body(...),
+    date: str = Body(...)
+):
+    """Delete a task and notify all team members."""
+    project = db.get_project(project_code)
+    if not project:
+        return JSONResponse(content={"error": "Project not found"}, status_code=404)
+
+    if not hasattr(project, "tasks") or date not in project.tasks:
+        return JSONResponse(content={"error": "Task not found"}, status_code=404)
+
+    # Find and remove the task
+    project.tasks[date] = [t for t in project.tasks[date] if t["id"] != task_id]
+    project._p_changed = True
+    transaction.commit()
+
+    # Notify all connected clients about the task deletion
+    if project_code in task_connections:
+        for connection in task_connections[project_code]:
+            try:
+                await connection.send_json({
+                    "action": "task_delete",
+                    "task_id": task_id
+                })
+            except Exception as e:
+                print(f"WebSocket error: {e}")
+                task_connections[project_code].remove(connection)
+
+    return JSONResponse(content={"message": "Task deleted successfully"})
+
+@app.get("/get_tasks/{project_code}/{date}")
+async def get_tasks(project_code: str, date: str):
+    """Get all tasks for a specific date."""
+    project = db.get_project(project_code)
+    if not project:
+        return JSONResponse(content={"error": "Project not found"}, status_code=404)
+
+    tasks = project.tasks.get(date, []) if hasattr(project, "tasks") else []
+    return JSONResponse(content={"tasks": tasks})
+
+
+@app.get("/get_tasks_for_month/{project_code}/{year}/{month}")
+async def get_tasks_for_month(project_code: str, year: int, month: int):
+    """Get all tasks for a specific month."""
+    project = db.get_project(project_code)
+    if not project or not hasattr(project, "tasks"):
+        return JSONResponse(content={"tasks": []})
+
+    tasks_in_month = []
+
+    for date_str, task_list in project.tasks.items():
+        try:
+            date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+            if date_obj.year == year and date_obj.month == month:
+                tasks_in_month.extend(task_list)
+        except Exception as e:
+            print(f"Error parsing date {date_str}: {e}")
+            continue
+
+    return JSONResponse(content={"tasks": tasks_in_month})
