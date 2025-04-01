@@ -190,6 +190,26 @@ async def project_hub(request: Request, project_code: str, user: str):
     if user not in project.members:
         return "You are not a member of this project"
     
+    if not getattr(project, "gantt_chart", []):
+        print("⚠️ Warning: project.gantt_chart is empty. Reload from disk if needed.")
+
+
+    all_tasks = [
+        {
+            **task, 
+            "completed_seconds": int(task.get("completed_seconds", 0)),  
+            "hours_to_complete": int(task.get("hours_to_complete", 1))
+        }
+        for task in getattr(project, "gantt_chart", [])
+    ]
+
+    assigned_tasks = [
+        task for task in all_tasks if isinstance(task.get("assigned_to"), list) and user in task["assigned_to"]
+    ]
+
+    print(f"All Tasks: {json.dumps(all_tasks, indent=2)}")  # ✅ Debug all tasks
+    print(f"Assigned Tasks for {user}: {json.dumps(assigned_tasks, indent=2)}")  # ✅ Debug assigned tasks
+
     
     if not any(chat.chat_id == "general1" for chat in project.chats):
         project.create_general_chat()
@@ -212,7 +232,9 @@ async def project_hub(request: Request, project_code: str, user: str):
         "request": request,
         "project": project,
         "members": project.members,
-        "user": user
+        "user": user,
+        "assigned_tasks": assigned_tasks,
+        "all_tasks": all_tasks  # ✅ Send all tasks for reference
     })
 
 @app.get("/get_recent_projects")
@@ -221,6 +243,10 @@ async def get_recent_projects(user: str):
     recent_projects = recent_projects_store.get(user, [])[:3]
     return JSONResponse(content={"recent_projects": recent_projects})
 
+
+
+
+active_users_per_task: Dict[str, int] = {}  # Track active workers per task
 
 @app.websocket("/ws/{project_code}")
 async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str = Query(...)):
@@ -234,16 +260,40 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
 
     # ✅ Add WebSocket & user
     project_connections[project_code].append(websocket)
+    
     online_users[project_code].add(user)
 
-    print(f"🟢 {user} is now ONLINE in project {project_code}")
-
-    # ✅ Notify all clients about updated online users
     await notify_project_users(project_code)
 
     try:
         while True:
-            await websocket.receive_text()  # Keep connection open
+            data = await websocket.receive_json()
+            
+            action = data.get("action")
+            task_name = data.get("task_name")
+            assigned_to = data.get("assigned_to")
+
+            task_key = f"{task_name}-{','.join(assigned_to)}"
+
+            if action == "start_work":
+                # ✅ Increase active worker count per task
+                active_users_per_task[task_key] = active_users_per_task.get(task_key, 0) + 1
+                print(f"🟢 {active_users_per_task[task_key]} users working on {task_name}")
+
+                # ✅ Broadcast the active worker count
+                await broadcast_active_users(project_code, task_name, assigned_to)
+
+            elif action == "stop_work":
+                if task_key in active_users_per_task:
+                    active_users_per_task[task_key] -= 1
+                    if active_users_per_task[task_key] <= 0:
+                        del active_users_per_task[task_key]
+                
+                print(f"🔴 {active_users_per_task.get(task_key, 0)} users working on {task_name}")
+
+                # ✅ Broadcast updated worker count
+                await broadcast_active_users(project_code, task_name, assigned_to)
+                
     except WebSocketDisconnect:
         print(f"🔴 {user} went OFFLINE in project {project_code}")
 
@@ -263,6 +313,23 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
 
         # ✅ Notify remaining clients about updated online users
         await notify_project_users(project_code)
+
+async def broadcast_active_users(project_code: str, task_name: str, assigned_to: list):
+    """Send active worker count update to all WebSocket clients"""
+    task_key = f"{task_name}-{','.join(assigned_to)}"
+    active_workers = active_users_per_task.get(task_key, 0)
+
+    update_message = {
+        "action": "update_active_users",
+        "task_name": task_name,
+        "assigned_to": assigned_to,
+        "active_workers": active_workers
+    }
+
+    if project_code in project_connections:
+        for connection in project_connections[project_code]:
+            await connection.send_json(update_message)
+
 
 
 @app.websocket("/ws/tasks/{project_code}")
@@ -353,25 +420,123 @@ async def gantt_chart(request: Request, project_code: str, user: str):
 async def get_activities(project_code: str):
     project = db.get_project(project_code)
     if not project:
-        return {"activities": []}  # Return an empty list if the project is invalid
-    return {"activities": getattr(project, "gantt_chart", [])}
+        return {"activities": []}
+
+    activities = getattr(project, "gantt_chart", [])
+
+    for activity in activities:
+        # ✅ Make sure `assigned_to` stays a list!
+        if isinstance(activity.get("assigned_to"), str):
+            activity["assigned_to"] = [u.strip() for u in activity["assigned_to"].split(";") if u.strip()]
+
+        # ✅ Ensure `completed_seconds` is always present
+        if "work_hours_per_day" in activity and "days" in activity:
+            if "completed_seconds" not in activity:
+                activity["completed_seconds"] = 0  # Default to 0
+
+    return {"activities": activities}
+
+
+
 
 
 
 
 @app.post("/save_gantt_chart")
 async def save_gantt_chart(data: dict = Body(...)):
-    print(data)
     project_code = data.get("project_code")
     activities = data.get("activities", [])
 
-    # Call the database method to save the Gantt chart
+    for activity in activities:
+        if isinstance(activity.get("assigned_to"), str):
+            assigned_users = activity["assigned_to"].strip()
+            activity["assigned_to"] = assigned_users.split(";") if assigned_users else []
+
+        # ✅ Ensure `completed_seconds` is always initialized to 0 (for tasks, not milestones)
+        if "work_hours_per_day" in activity and "days" in activity:
+            if "completed_seconds" not in activity:
+                activity["completed_seconds"] = 0  # Default to 0
+
     success, message = db.save_gantt_chart(project_code, activities)
 
-    if not success:
-        return {"message": message}  # Return error message if saving failed
+    if success:
+        # Notify WebSocket users
+        if project_code in project_connections:
+            for connection in project_connections[project_code]:
+                await connection.send_json({
+                    "action": "gantt_chart_update",
+                    "activities": activities
+                })
+    return {"message": message}
 
-    return {"message": message}  # Return success message
+
+@app.post("/update_task_progress")
+async def update_task_progress(data: dict = Body(...)):
+    project_code = data.get("project_code")
+    task_name = data.get("task_name")
+    assigned_to = data.get("assigned_to")
+    completed_seconds = int(data.get("completed_seconds", 0))
+
+    print(f"🔹 Received update request: project_code={project_code}, task_name={task_name}, assigned_to={assigned_to}, completed_seconds={completed_seconds}")
+
+    if not project_code:
+        return {"success": False, "message": "Missing project_code"}
+
+    project = db.get_project(project_code)
+    if not project:
+        return {"success": False, "message": "Invalid project"}
+
+    updated = False
+    for task in project.gantt_chart:
+        if task.get("name") == task_name and sorted(task.get("assigned_to", [])) == sorted(assigned_to):
+
+            prev_seconds = task.get("completed_seconds", 0)
+
+            # ✅ Only update if the value has actually changed
+            if completed_seconds > prev_seconds:
+                task["completed_seconds"] = completed_seconds  # Save in DB
+                updated = True
+                print(f"✅ Task match found: Updating completed_time from {prev_seconds}s to {completed_seconds}s")
+
+    if updated and completed_seconds > prev_seconds:
+        success, message = db.save_gantt_chart(project_code, project.gantt_chart)
+
+        # ✅ Only send WebSocket update if the database save was successful
+        if success and project_code in project_connections:
+            update_message = {
+                "action": "update_progress",
+                "task_name": task_name,
+                "assigned_to": assigned_to,
+                "completed_seconds": completed_seconds,
+                "formatted_time": f"{completed_seconds // 3600}h {(completed_seconds % 3600) // 60}m {completed_seconds % 60}s"
+            }
+            print(f"📡 Sending WebSocket update: {update_message}")
+
+            for connection in project_connections[project_code]:
+                await connection.send_json(update_message)
+
+        return {"success": success, "message": message}
+
+
+    print("❌ Task not found in the database!")
+    return {"success": False, "message": "Task not found"}
+
+@app.get("/get_task_progress")
+async def get_task_progress(project_code: str, task_name: str, assigned_to: str):
+    project = db.get_project(project_code)
+    if not project:
+        return {"success": False, "message": "Invalid project"}
+
+    assigned_users = assigned_to.split(",")
+
+    for task in project.gantt_chart:
+        if task.get("name") == task_name and sorted(task.get("assigned_to", [])) == sorted(assigned_users):
+            return {"success": True, "completed_seconds": task.get("completed_seconds", 0)}
+
+    return {"success": False, "message": "Task not found"}
+
+
+
 
 
 
