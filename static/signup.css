@@ -1,3 +1,9 @@
+:root {
+    --font-copernicus: "Copernicus", serif;
+    --font-tiempos: "Tiempos", serif;
+    --font-styrene-b: 'Styrene B', sans-serif;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -6,7 +12,7 @@
 
 body {
     font-family: Arial, sans-serif;
-    background-color: #F3E2D0;
+    background-color: #FAF9F5;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -15,7 +21,7 @@ body {
 
 .container {
     text-align: center;
-    background-color: #FFF;
+    background-color: #F0EEE6;
     padding: 40px;
     border-radius: 8px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -24,37 +30,39 @@ body {
 }
 
 h1 {
-    font-family: 'Lalezar';
+    font-family: var(--font-copernicus), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
     font-size: 2rem;
-    color: #3A5635;
-    font-weight: bold;
+    color: #3D3929;
+    font-weight: inherit;
     margin-bottom: 10px;
 }
 
 p {
-    font-family: 'Albert Sans';
+    font-family: var(--font-tiempos), ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    color: #3D3929;
     font-size: 1rem;
     color: rgb(83, 81, 81);
     margin-bottom: 20px;
 }
 
 form input {
+    font-family: var(--font-styrene-b), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !important;
     width: 100%;
     padding: 12px;
     margin: 10px 0;
-    border: 1px solid #000000;
+    border: 1px solid hsl(0, 0%, 42%);
     border-radius: 50px;
     font-size: 1rem;
-    background-color: #F9F9F9;
+    background-color: #FFFFFF;
 }
 
 form button {
-    font-family: 'Albert Sans';
+    font-family: var(--font-styrene-b), ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !important;
     width: 100%;
     padding: 12px;
     font-size: 1rem;
-    color: #FFF;
-    background-color: #4A5A48;
+    color: #FFFFFF;
+    background-color: #BA5B38;
     border: none;
     border-radius: 4px;
     cursor: pointer;
@@ -62,6 +70,39 @@ form button {
     margin-top: 20px;
 }
 
-form button:hover {
-    background-color: #3A5635;
+
+.hidden {
+    display: none;
+}
+.modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 20px;
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+    width: 350px;
+}
+
+.close {
+    color: red;
+    float: right;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.profile-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
 }

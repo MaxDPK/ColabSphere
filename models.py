@@ -6,6 +6,7 @@ from ZODB.FileStorage import FileStorage
 import transaction
 import base64
 from typing import List, Dict
+from persistent.list import PersistentList
 
 # --------- USER CLASS ---------
 class User(Persistent):
@@ -54,7 +55,7 @@ class Project(Persistent):
         self.members = [owner]  # List of usernames
         self.gantt_chart = []  # List to store Gantt chart activities
         self.chats = []  # Store chat objects
-
+        self.tasks = PersistentMapping()
        
         self.create_general_chat()
 
@@ -85,7 +86,15 @@ class Project(Persistent):
         transaction.commit()
         return chat
 
-
+    def add_task(self, date, task, user):
+        """Adds a task to the project for a specific date and user."""
+        if date not in self.tasks:
+            self.tasks[date] = []
+        task_entry = {"id": str(uuid.uuid4()), "date": date, "task": task, "user": user}
+        self.tasks[date].append(task_entry)
+        self._p_changed = True
+        transaction.commit()
+        return task_entry
 
 # --------- DATABASE CLASS ---------
 class Database:
@@ -217,6 +226,11 @@ class Database:
         """Close the database connection."""
         self.connection.close()
         self.db.close()
+
+
+    
+
+  
 
 
 # Create a global instance of the database
