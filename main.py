@@ -826,15 +826,15 @@ async def delete_task(
 
     return JSONResponse(content={"message": "Task deleted successfully"})
 
-@app.get("/get_tasks/{project_code}/{date}")
-async def get_tasks(project_code: str, date: str):
-    """Get all tasks for a specific date."""
-    project = db.get_project(project_code)
-    if not project:
-        return JSONResponse(content={"error": "Project not found"}, status_code=404)
+# @app.get("/get_tasks/{project_code}/{date}")
+# async def get_tasks(project_code: str, date: str):
+#     """Get all tasks for a specific date."""
+#     project = db.get_project(project_code)
+#     if not project:
+#         return JSONResponse(content={"error": "Project not found"}, status_code=404)
 
-    tasks = project.tasks.get(date, []) if hasattr(project, "tasks") else []
-    return JSONResponse(content={"tasks": tasks})
+#     tasks = project.tasks.get(date, []) if hasattr(project, "tasks") else []
+#     return JSONResponse(content={"tasks": tasks})
 
 
 @app.get("/get_tasks_for_month/{project_code}/{year}/{month}")
