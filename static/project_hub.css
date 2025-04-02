@@ -1,3 +1,4 @@
+
 body {
     display: flex;
     margin: 0;
@@ -792,13 +793,14 @@ body.calendar-open {
 
 /* === Edit Task Modal Specific Styles === */
 .modal-content {
-    background: #ffffff;
+    background: #e6d6c1;
     padding: 30px;
     border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    box-shadow: 0 8px 24px rgba(59, 55, 46, 0.15);
     width: 400px;
     max-width: 95%;
     text-align: center;
+    z-index: 10000 !important; /* Added higher z-index */
 }
 
 #editTaskModal h2 {
@@ -998,6 +1000,7 @@ body.calendar-open {
     width: 400px;
     max-width: 95%;
     text-align: center;
+    z-index: 10000 !important; /* Added higher z-index */
 }
 
 #editTaskModal h2, #taskModal h2 {
@@ -1503,7 +1506,7 @@ h2:contains("Team Members") {
     right: 0;
     bottom: 0;
     background-color: rgba(0, 0, 0, 0.5);
-    z-index: 8000 !important;  /* Lower z-index to be below both calendar and tasks popup */
+    z-index: 8999 !important;  /* Just below calendar popup */
 }
 
 /* Calendar Popup */
@@ -1513,6 +1516,12 @@ h2:contains("Team Members") {
 
 /* Tasks Popup */
 .tasks-popup {
-    z-index: 99999 !important;
+    z-index: 9500 !important;  /* Adjusted to be between calendar and task modal */
 }
+
+/* Ensure task modal is above everything */
+#taskModal, #editTaskModal {
+    z-index: 10000 !important;
+}
+
 

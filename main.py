@@ -13,14 +13,17 @@ from pydantic import BaseModel
 import transaction
 import uuid
 import datetime
+from pathlib import Path
 
 app = FastAPI()
 
+# Create uploads directory if it doesn't exist
+UPLOAD_DIR = Path("static/uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # Templates and static files setup
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 
 # Track online users and WebSocket connections per project
 online_users: Dict[str, set] = {}
@@ -74,7 +77,7 @@ async def signup(request: Request, username: str = Form(...), password: str = Fo
         return JSONResponse(content={"error": "User already exists."}, status_code=400)
 
     if db.add_user(username, password):
-        return JSONResponse(content={"message": "Signup successful!", "user": username})
+        return RedirectResponse(f"/choose_profile_pic?user={username}", status_code=303)
 
     return JSONResponse(content={"error": "An unexpected error occurred."}, status_code=500)
 
@@ -99,7 +102,7 @@ async def upload_profile_pic(user: str = Form(...), file: UploadFile = File(...)
     profile_pic_data = await file.read()  # Read file as binary
     db.update_user_profile_pic(user, profile_pic_data)
 
-    return RedirectResponse(f"/menu?user={user}", status_code=303)
+    return RedirectResponse("/login", status_code=303)
 
 @app.post("/keep_default_profile_pic")
 async def keep_default_profile_pic(user: str = Form(...)):
@@ -113,7 +116,7 @@ async def keep_default_profile_pic(user: str = Form(...)):
     # Set the profile picture to default (empty or predefined binary default)
     db.update_user_profile_pic(user, None)
 
-    return RedirectResponse(f"/menu?user={user}", status_code=303)
+    return RedirectResponse("/login", status_code=303)
 
 @app.get("/menu", response_class=HTMLResponse)
 async def menu(request: Request, user: str):
@@ -379,23 +382,6 @@ async def notify_project_users(project_code: str):
                 })
             except Exception:
                 project_connections[project_code].remove(connection)
-
-
-
-@app.get("/gantt_chart", response_class=HTMLResponse)
-async def gantt_chart(request: Request, project_code: str, user: str):
-    project = db.get_project(project_code)
-    if not project:
-        return "Invalid project"
-    if user not in project.members:
-        return "You are not a member of this project"
-    return templates.TemplateResponse("gantt_chart.html", {
-        "request": request,
-        "project_code": project_code,
-        "user": user,
-        "members": project.members,  # Pass the list of team members
-        "activities": getattr(project, "gantt_chart", [])  # Safeguard if gantt_chart doesn't exist yet
-    })
 
 
 
@@ -1022,26 +1008,56 @@ async def get_tasks_for_month(project_code: str, year: int, month: int):
 
     return JSONResponse(content={"tasks": tasks_in_month})
 
-@app.post("/leave_project")
-async def leave_project(user: str = Form(...), project_code: str = Form(...)):
-    project = db.get_project(project_code)
-    if not project:
-        return JSONResponse(content={"error": "Project not found"}, status_code=404)
-    
-    if user not in project.members:
-        return JSONResponse(content={"error": "User is not a member of this project"}, status_code=400)
+@app.post("/upload_file")
+async def upload_file(
+    file: UploadFile = File(...),
+    chat_id: str = Form(...),
+    user: str = Form(...),
+    project_code: str = Query(...)
+):
+    """Handle file uploads for chat messages."""
+    try:
+        # Validate project and user
+        project = db.get_project(project_code)
+        if not project:
+            return JSONResponse(
+                content={"success": False, "error": "Project not found"},
+                status_code=404
+            )
 
-    # Remove user from project members
-    project.members.remove(user)
-    project._p_changed = True
+        chat = project.get_chat(chat_id)
+        if not chat or user not in chat.participants:
+            return JSONResponse(
+                content={"success": False, "error": "Chat not found or unauthorized"},
+                status_code=403
+            )
 
-    # Remove project from user’s list
-    user_obj = db.get_user(user)
-    if user_obj and project_code in user_obj.projects:
-        user_obj.projects.remove(project_code)
-        user_obj._p_changed = True
+        # Generate unique filename while preserving extension
+        file_ext = Path(file.filename).suffix
+        unique_filename = f"{uuid.uuid4()}{file_ext}"
+        file_path = UPLOAD_DIR / unique_filename
 
-    # Commit changes
-    transaction.commit()
-    
-    return JSONResponse(content={"message": "Left project successfully"})
+        # Save the file
+        try:
+            with file_path.open("wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            
+            print(f"✅ File saved successfully: {unique_filename}")
+            return JSONResponse(content={
+                "success": True,
+                "filename": unique_filename,
+                "original_name": file.filename
+            })
+        except Exception as e:
+            print(f"❌ File save error: {str(e)}")
+            return JSONResponse(
+                content={"success": False, "error": f"File save error: {str(e)}"},
+                status_code=500
+            )
+
+    except Exception as e:
+        print(f"❌ File upload error: {str(e)}")
+        return JSONResponse(
+            content={"success": False, "error": str(e)},
+            status_code=500
+        )

@@ -31,22 +31,22 @@
 
     <!-- PyScript to validate passwords -->
     <py-script>
-from pyscript import document
+        from pyscript import document
 
-def validate_password(event):
-    password = document.querySelector("#password").value
-    confirm_password = document.querySelector("#confirm_password").value
-    error_message = document.querySelector("#error-message")
-    
-    if password != confirm_password:
-        error_message.innerText = "Passwords do not match. Please try again."
-        event.preventDefault()  # Prevent form submission
-    else:
-        error_message.innerText = ""  # Clear error if passwords match
+        def validate_password(event):
+            password = document.querySelector("#password").value
+            confirm_password = document.querySelector("#confirm_password").value
+            error_message = document.querySelector("#error-message")
+            
+            if password != confirm_password:
+                error_message.innerText = "Passwords do not match. Please try again."
+                event.preventDefault()  # Prevent form submission
+            else:
+                error_message.innerText = ""  # Clear error if passwords match
 
-# Attach the validate_password function to the form submit event
-form = document.querySelector("#signup-form")
-form.addEventListener("submit", validate_password)
+        # Attach the validate_password function to the form submit event
+        form = document.querySelector("#signup-form")
+        form.addEventListener("submit", validate_password)
     </py-script>
 </body>
 </html>

@@ -1,30 +1,459 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Chat</title>
+    <title>Chat - {{ chat.chat_id }}</title>
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        #messages { height: 300px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; }
-        .message { padding: 5px; margin-bottom: 5px; border-bottom: 1px solid #ddd; }
-        .sender { font-weight: bold; }
+        :root {
+            --primary-color: #8B7355;
+            --bg-color: #e6d6c1;
+            --message-bg: #ffffff;
+            --sent-message-bg: #dec5a3;
+            --text-color: #3B372E;
+            --border-color: #d4bea0;
+            --input-bg: #ffffff;
+            --hover-color: #c9b08e;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+        }
+
+        .chat-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-color);
+            box-shadow: 0 2px 10px rgba(139, 115, 85, 0.15);
+        }
+
+        .chat-header {
+            padding: 1rem 1.5rem;
+            background: var(--sent-message-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .chat-header h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-color);
+            margin: 0;
+        }
+
+        .back-button {
+            text-decoration: none;
+            color: var(--text-color);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-color);
+            border-radius: 1.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .back-button:hover {
+            background: var(--hover-color);
+        }
+
+        #messages {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+            background: var(--message-bg);
+            box-shadow: 0 1px 2px rgba(139, 115, 85, 0.1);
+            position: relative;
+            margin: 0;
+            border: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.sent {
+            background: var(--sent-message-bg);
+            align-self: flex-end;
+            border-bottom-right-radius: 0.25rem;
+        }
+
+        .message.received {
+            align-self: flex-start;
+            border-bottom-left-radius: 0.25rem;
+            background: var(--message-bg);
+        }
+
+        .sender {
+            font-weight: bolder;
+            color: rgb(40, 40, 188);
+            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
+        }
+
+        .message-content {
+            color: var(--text-color);
+            word-break: break-word;
+        }
+
+        .chat-input-container {
+            padding: 1rem 1.5rem;
+            background: var(--sent-message-bg);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        /* File upload styles */
+        .file-upload {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .file-upload input[type="file"] {
+            display: none;
+        }
+
+        .file-upload label {
+            cursor: pointer;
+            padding: 0.75rem;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .file-upload label:hover {
+            background: var(--hover-color);
+        }
+
+        .file-preview {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            background: var(--message-bg);
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-bottom: 0.5rem;
+        }
+
+        .file-preview.show {
+            display: block;
+        }
+
+        .file-preview img {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 0.25rem;
+        }
+
+        /* Message attachment styles */
+        .message-attachment {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(0,0,0,0.05);
+            border-radius: 0.5rem;
+        }
+
+        .message-attachment a {
+            color: var(--primary-color);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .message-attachment img {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 0.25rem;
+        }
+
+        .message-attachment .file-icon {
+            font-size: 1.5rem;
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 1.5rem;
+            font-size: 0.95rem;
+            background: var(--input-bg);
+            transition: all 0.2s ease;
+            font-family: inherit;
+            color: var(--text-color);
+        }
+
+        #messageInput:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(139, 115, 85, 0.1);
+        }
+
+        button {
+            padding: 0.75rem 1.5rem;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 1.5rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        button:hover {
+            background-color: var(--hover-color);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        /* Scrollbar styling */
+        #messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #messages::-webkit-scrollbar-track {
+            background: var(--bg-color);
+        }
+
+        #messages::-webkit-scrollbar-thumb {
+            background: var(--hover-color);
+            border-radius: 3px;
+        }
+
+        #messages::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-color);
+        }
+
+        /* Loading indicator */
+        .connecting {
+            text-align: center;
+            padding: 1rem;
+            color: var(--text-color);
+            font-size: 0.9rem;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .chat-container {
+                height: 100vh;
+                max-width: 100%;
+            }
+
+            .message {
+                max-width: 90%;
+            }
+
+            .chat-header h1 {
+                font-size: 1.1rem;
+            }
+        }
+
+        /* Add styles for channel list */
+        .app-container {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+            background: var(--bg-color);
+        }
+
+        .channel-sidebar {
+            width: 280px;
+            background: var(--sent-message-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .channel-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--sent-message-bg);
+        }
+
+        .channel-header h2 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: var(--text-color);
+        }
+
+        .channel-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 0;
+        }
+
+        .channel-item {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            color: var(--text-color);
+            text-decoration: none;
+        }
+
+        .channel-item:hover {
+            background: var(--hover-color);
+        }
+
+        .channel-item.active {
+            background: var(--bg-color);
+            font-weight: 500;
+        }
+
+        .channel-item span {
+            margin-left: 0.5rem;
+        }
+
+        /* Update chat container for new layout */
+        .chat-container {
+            flex: 1;
+            max-width: none;
+            margin: 0;
+            border-radius: 0;
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .channel-sidebar {
+                width: 100%;
+                position: fixed;
+                left: -100%;
+                transition: left 0.3s ease;
+            }
+
+            .channel-sidebar.show {
+                left: 0;
+            }
+
+            .toggle-sidebar {
+                display: block;
+            }
+        }
+
+        /* Add some CSS styles for file attachments */
+        .message-attachment {
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(0,0,0,0.05);
+            border-radius: 8px;
+        }
+        
+        .message-attachment a {
+            display: flex;
+            align-items: center;
+            color: inherit;
+            text-decoration: none;
+            padding: 8px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+        }
+        
+        .message-attachment a:hover {
+            background-color: rgba(0,0,0,0.05);
+        }
+        
+        .file-icon {
+            font-size: 1.5em;
+            margin-right: 8px;
+        }
+        
+        .message-attachment img {
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        
+        .message-attachment img:hover {
+            transform: scale(1.02);
+        }
     </style>
 </head>
 <body>
-
-    <h1>Chat: {{ chat.chat_id }}</h1>
+    <div class="app-container">
+        <div class="channel-sidebar">
+            <div class="channel-header">
+                <h2>Channels</h2>
+            </div>
+            <div class="channel-list" id="channelList">
+                <!-- Channels will be populated here -->
+            </div>
+        </div>
+        <div class="chat-container">
+            <div class="chat-header">
+                <h1>{{ chat.chat_id }}</h1>
+                <a href="/project_hub/{{ project_code }}?user={{ user }}" class="back-button">
+                    ← Back to Project Hub
+                </a>
+            </div>
 
     <div id="messages"></div>
 
-    <input type="text" id="messageInput" placeholder="Type a message">
-    <button py-click="send_message">Send</button>
+            <div class="chat-input-container">
+                <div class="file-upload">
+                    <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.py">
+                    <label for="fileInput">📎</label>
+                    <div class="file-preview" id="filePreview"></div>
+                </div>
+                <input type="text" id="messageInput" placeholder="Type your message..." autocomplete="off">
+                <button id="sendButton" py-click="send_message">Send</button>
+            </div>
+        </div>
+    </div>
 
     <py-script>
         import asyncio
-        from js import document, WebSocket, window
+        from js import document, WebSocket, window, File, FileReader, Object
         from pyodide.ffi import create_proxy
         import json
+        import base64
     
         chat_id = "{{ chat.chat_id }}"
         username = "{{ user }}"
@@ -39,7 +468,9 @@
         print(f"🔍 WebSocket URL: {ws_url}")
     
         ws = None
-        reconnect_attempts = 0  
+        reconnect_attempts = 0
+        current_file = None
+        is_sending = False
     
         def connect_websocket():
             """Establish WebSocket connection and prevent infinite reconnect loops."""
@@ -76,37 +507,175 @@
     
             if data.get("error"):
                 print(f"❌ Server Error: {data['error']}")
-                return  # Stop processing if there's an error message
+                return
     
-            # ✅ Handle chat history
             if data.get("action") == "history":
                 print("📜 Loading chat history...")
                 messages_div = document.getElementById("messages")
-                messages_div.innerHTML = ""  # Clear chat box
+                messages_div.innerHTML = ""
     
                 for msg in data["messages"]:
-                    if isinstance(msg, dict) and "user" in msg and "message" in msg:  # ✅ Ensure both fields exist
-                        message_element = document.createElement("div")
-                        message_element.classList.add("message")
-                        message_element.innerHTML = f"{msg['user']}: {msg['message']}"
-                        messages_div.appendChild(message_element)
+                    if isinstance(msg, dict) and "user" in msg and "message" in msg:
+                        create_message_element(msg["user"], msg["message"])
                     else:
                         print(f"⚠️ WARNING: Skipping invalid message: {msg}")
     
                 messages_div.scrollTop = messages_div.scrollHeight  
     
-            # ✅ Handle new messages
             elif data.get("action") == "new_message":
-                if isinstance(data, dict) and "user" in data and "message" in data:  # ✅ Prevent KeyError
+                if isinstance(data, dict) and "user" in data and "message" in data:
                     print(f"📩 Received new message: {data['user']}: {data['message']}")
+                    create_message_element(data["user"], data["message"])
                     messages_div = document.getElementById("messages")
-                    message_element = document.createElement("div")
-                    message_element.classList.add("message")
-                    message_element.innerHTML = f"{data['user']}: {data['message']}"
-                    messages_div.appendChild(message_element)
+                    messages_div.scrollTop = messages_div.scrollHeight
     
-                    messages_div.scrollTop = messages_div.scrollHeight  
-    
+        def create_message_element(user, message_data):
+            """Creates a styled message element and adds it to the chat."""
+            messages_div = document.getElementById("messages")
+            message_element = document.createElement("div")
+            message_element.classList.add("message")
+            message_element.classList.add("received" if user != username else "sent")
+            
+            sender = document.createElement("div")
+            sender.classList.add("sender")
+            sender.textContent = user
+            
+            content = document.createElement("div")
+            content.classList.add("message-content")
+            
+            if isinstance(message_data, str):
+                try:
+                    # Try to parse as JSON in case it's a file message
+                    data = json.loads(message_data.replace(f"{user}: ", "", 1))
+                    if isinstance(data, dict) and "file" in data:
+                        # Handle file message
+                        if data.get("text"):
+                            text_div = document.createElement("div")
+                            text_div.textContent = data["text"]
+                            content.appendChild(text_div)
+                        
+                        attachment = document.createElement("div")
+                        attachment.classList.add("message-attachment")
+                        
+                        file_data = data["file"]
+                        file_type = file_data["type"]
+                        file_url = f"/static/uploads/{file_data['name']}"
+                        display_name = file_data.get("original_name", file_data["name"])
+                        
+                        if file_type.startswith("image/"):
+                            img = document.createElement("img")
+                            img.src = file_url
+                            img.style.maxWidth = "200px"
+                            img.style.cursor = "pointer"
+                            img.onclick = create_proxy(lambda e: window.open(file_url, "_blank"))
+                            attachment.appendChild(img)
+                            
+                            # Add image filename below
+                            name_div = document.createElement("div")
+                            name_div.style.marginTop = "5px"
+                            name_div.style.fontSize = "0.9em"
+                            name_div.textContent = display_name
+                            attachment.appendChild(name_div)
+                        else:
+                            # Create a styled download link for non-image files
+                            link = document.createElement("a")
+                            link.href = file_url
+                            link.target = "_blank"
+                            link.download = display_name
+                            
+                            # Add file icon and styling
+                            icon_span = document.createElement("span")
+                            icon_span.classList.add("file-icon")
+                            if file_type == "application/pdf":
+                                icon_span.textContent = "📄"
+                            elif file_type.startswith("video/"):
+                                icon_span.textContent = "🎥"
+                            elif file_type.startswith("audio/"):
+                                icon_span.textContent = "🎵"
+                            else:
+                                icon_span.textContent = "📎"
+                            
+                            # Create file name span
+                            name_span = document.createElement("span")
+                            name_span.textContent = " " + display_name
+                            name_span.style.marginLeft = "5px"
+                            
+                            link.appendChild(icon_span)
+                            link.appendChild(name_span)
+                            attachment.appendChild(link)
+                        
+                        content.appendChild(attachment)
+                    else:
+                        content.textContent = message_data.replace(f"{user}: ", "", 1)
+                except:
+                    content.textContent = message_data.replace(f"{user}: ", "", 1)
+            else:
+                # Handle direct message data objects
+                if "file" in message_data:
+                    if message_data.get("text"):
+                        text_div = document.createElement("div")
+                        text_div.textContent = message_data["text"]
+                        content.appendChild(text_div)
+                    
+                    attachment = document.createElement("div")
+                    attachment.classList.add("message-attachment")
+                    
+                    file_data = message_data["file"]
+                    file_type = file_data["type"]
+                    file_url = f"/static/uploads/{file_data['name']}"
+                    display_name = file_data.get("original_name", file_data["name"])
+                    
+                    if file_type.startswith("image/"):
+                        img = document.createElement("img")
+                        img.src = file_url
+                        img.style.maxWidth = "200px"
+                        img.style.cursor = "pointer"
+                        img.onclick = create_proxy(lambda e: window.open(file_url, "_blank"))
+                        attachment.appendChild(img)
+                        
+                        # Add image filename below
+                        name_div = document.createElement("div")
+                        name_div.style.marginTop = "5px"
+                        name_div.style.fontSize = "0.9em"
+                        name_div.textContent = display_name
+                        attachment.appendChild(name_div)
+                    else:
+                        # Create a styled download link for non-image files
+                        link = document.createElement("a")
+                        link.href = file_url
+                        link.target = "_blank"
+                        link.download = display_name
+                        
+                        # Add file icon and styling
+                        icon_span = document.createElement("span")
+                        icon_span.classList.add("file-icon")
+                        if file_type == "application/pdf":
+                            icon_span.textContent = "📄"
+                        elif file_type.startswith("video/"):
+                            icon_span.textContent = "🎥"
+                        elif file_type.startswith("audio/"):
+                            icon_span.textContent = "🎵"
+                        else:
+                            icon_span.textContent = "📎"
+                        
+                        # Create file name span
+                        name_span = document.createElement("span")
+                        name_span.textContent = " " + display_name
+                        name_span.style.marginLeft = "5px"
+                        
+                        link.appendChild(icon_span)
+                        link.appendChild(name_span)
+                        attachment.appendChild(link)
+                    
+                    content.appendChild(attachment)
+                else:
+                    content.textContent = message_data
+            
+            message_element.appendChild(sender)
+            message_element.appendChild(content)
+            messages_div.appendChild(message_element)
+            messages_div.scrollTop = messages_div.scrollHeight
+
         def on_error(event):
             """Handle WebSocket errors."""
             print("❌ WebSocket encountered an error:", event)
@@ -118,30 +687,159 @@
                 print(f"🔄 Reconnecting in 2 seconds... (Attempt {reconnect_attempts})")
                 window.setTimeout(create_proxy(connect_websocket), 2000)
     
-        def send_message(event=None):
-            """Send a message over WebSocket."""
-            global ws
-            message_input = document.getElementById("messageInput")
-            if message_input and ws and ws.readyState == WebSocket.OPEN:
-                message = message_input.value
-                if message:
-                    ws.send(f"{username}: {message}")
-                    message_input.value = ""
+        def handle_file_select(event):
+            global current_file
+            file_input = document.getElementById("fileInput")
+            file_preview = document.getElementById("filePreview")
+            
+            files = file_input.files
+            if files.length > 0:
+                current_file = files.item(0)
+                file_preview.classList.add("show")
+                
+                file_type = current_file.type
+                
+                if file_type.startswith("image/"):
+                    reader = FileReader.new()
+                    def on_load(e):
+                        # Create an img element and set its source
+                        img = document.createElement("img")
+                        img.src = e.target.result
+                        # Clear previous preview and add the new image
+                        file_preview.innerHTML = ""
+                        file_preview.appendChild(img)
+                    reader.onload = create_proxy(on_load)
+                    reader.readAsDataURL(current_file)
+                else:
+                    file_preview.innerHTML = f'<div class="file-icon">📄 {current_file.name}</div>'
             else:
-                print("❌ Error: WebSocket is closed. Reconnecting...")
-                connect_websocket()
+                current_file = None
+                file_preview.classList.remove("show")
+                file_preview.innerHTML = ""
+    
+        async def upload_file(file):
+            form_data = window.FormData.new()
+            form_data.append("file", file)
+            form_data.append("chat_id", chat_id)
+            form_data.append("user", username)
+            
+            try:
+                print(f"📤 Uploading file {file.name}...")
+                response = await window.fetch(
+                    f"/upload_file?project_code={project_code}",
+                    method="POST",
+                    body=form_data
+                )
+                
+                if not response.ok:
+                    print(f"❌ Upload failed with status: {response.status}")
+                    return {"success": False, "error": f"HTTP {response.status}"}
+                
+                # Convert the response to a Python dictionary safely
+                try:
+                    js_result = await response.json()
+                    # Convert JsProxy to Python dict using Object.entries() and fromEntries()
+                    entries = Object.entries(js_result)
+                    result_dict = {str(k): v for k, v in entries}
+                    print(f"📥 Upload response: {json.dumps(result_dict)}")
+                    return result_dict
+                except Exception as e:
+                    print(f"❌ Error parsing response: {str(e)}")
+                    return {"success": False, "error": "Failed to parse response"}
+                    
+            except Exception as e:
+                print("❌ File upload error:", str(e))
+                return {"success": False, "error": str(e)}
+    
+        async def send_message(event=None):
+            """Send a message over WebSocket."""
+            global ws, current_file, is_sending
+            
+            # Prevent double submissions
+            if is_sending:
+                print("⚠️ Message already being sent, please wait...")
+                return
+                
+            try:
+                is_sending = True
+                message_input = document.getElementById("messageInput")
+                
+                if message_input and ws and ws.readyState == WebSocket.OPEN:
+                    message = message_input.value.strip()
+                    
+                    if current_file:
+                        print(f"📤 Attempting to upload file: {current_file.name}")
+                        # Store file type and name before upload
+                        file_type = current_file.type
+                        original_name = current_file.name
+                        
+                        # Upload file first
+                        upload_result = await upload_file(current_file)
+                        
+                        # Debug log the result
+                        print(f"📥 Upload result type: {type(upload_result)}")
+                        if upload_result:
+                            print(f"📥 Upload result content: {json.dumps(upload_result)}")
+                        
+                        if upload_result and upload_result.get("success", False):
+                            print(f"✅ File uploaded successfully: {upload_result.get('filename', '')}")
+                            # Send message with file attachment using stored file_type
+                            file_data = {
+                                "text": message,
+                                "file": {
+                                    "name": upload_result.get("filename", ""),
+                                    "type": file_type,
+                                    "original_name": original_name
+                                }
+                            }
+                            ws.send(f"{username}: {json.dumps(file_data)}")
+                            
+                            # Clear file preview and input
+                            document.getElementById("filePreview").classList.remove("show")
+                            document.getElementById("fileInput").value = ""
+                            current_file = None
+                            print("✅ Message with file sent successfully")
+                        else:
+                            error_msg = upload_result.get("error", "Unknown error") if upload_result else "Upload failed"
+                            print(f"❌ File upload failed: {error_msg}")
+                            return
+                    elif message:
+                        # Send text-only message
+                        ws.send(f"{username}: {message}")
+                        print("✅ Text message sent successfully")
+                    
+                    message_input.value = ""
+                else:
+                    print("❌ Error: WebSocket is closed. Reconnecting...")
+                    connect_websocket()
+            finally:
+                is_sending = False
     
         connect_websocket()
     
+        # Add event listeners
+        document.getElementById("fileInput").addEventListener(
+            "change",
+            create_proxy(handle_file_select)
+        )
+        
+        def handle_enter(event):
+            if event.key == "Enter" and not event.shiftKey:
+                event.preventDefault()
+                event.stopPropagation()  # Prevent event from triggering multiple times
+                asyncio.ensure_future(send_message())
+        
+        message_input = document.getElementById("messageInput")
+        if message_input:
+            message_input.addEventListener(
+                "keypress",
+                create_proxy(handle_enter)
+            )
+
         send_button = document.getElementById("sendButton")
         if send_button:
-            send_button.addEventListener("click", create_proxy(send_message))
-    
+            send_button.addEventListener("click", create_proxy(lambda e: asyncio.ensure_future(send_message())))
     </py-script>
-    
-    
-    
-    
-
 </body>
 </html>
+

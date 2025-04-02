@@ -94,13 +94,7 @@
         <div class="seating-container">
             <img src="/static/tbandchair.png" alt="Table and Chairs Layout" class="table-and-chairs">
             <div id="seating-area">
-              <!-- Profile pictures will be positioned over the chairs -->
-              {% for member in members %}
-                <div class="member-profile" data-member="{{ member }}">
-                  <img src="/static/profiles/{{ member }}.jpg" alt="{{ member }}" class="profile-pic">
-                  <span class="member-name">{{ member }}</span>
-                </div>
-              {% endfor %}
+              <!-- Profile pictures will be dynamically added by the WebSocket update_online_members function -->
             </div>
           </div>
         
@@ -382,6 +376,11 @@
         message_proxy = None
         task_message_proxy = None
         close_proxy = None
+        
+        # Create persistent proxies for channel modal
+        openModal_proxy = None
+        closeModal_proxy = None
+        addChannel_proxy = None
         
         # Calendar variables
         today = datetime.date.today()
@@ -1625,7 +1624,8 @@
                     
                     profile_pic = document.createElement("div")
                     profile_pic.classList.add("profile-pic")
-                    profile_pic.style.backgroundImage = f"url('{profile_pic_url}')"
+                    # Use the profile_pic_url directly since it's already a complete data URL or default image path
+                    profile_pic.style.backgroundImage = f"url({profile_pic_url})"
                     
                     status_indicator = document.createElement("div")
                     status_indicator.classList.add("status-indicator")
@@ -1759,8 +1759,93 @@
             
             document.getElementById("channel-list").appendChild(new_button)
         
+        async def save_channel(channel_name):
+            """
+            Sends a request to save a newly created channel with selected members.
+            """
+            try:
+                # ✅ Get all selected members
+                member_checkboxes = document.querySelectorAll(".member-checkbox:checked")
+                selected_members = [checkbox.value for checkbox in member_checkboxes]
+        
+                # ✅ Ensure we have at least one member
+                if not selected_members:
+                    console.log("⚠️ Error: At least one member must be selected!")
+                    return
+                
+                form_data = json.dumps({
+                    "project_code": project_code, 
+                    "channel_name": channel_name,
+                    "members": selected_members  # ✅ Include selected members in request
+                })
+                
+                response = await pyfetch(
+                    "/add_channel", 
+                    method="POST", 
+                    body=form_data, 
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                data = await response.json()
+                console.log(data["message"])
+        
+                # Refresh the list of channels
+                await fetch_channels()
+            
+            except Exception as e:
+                console.log(f"Error saving channel: {str(e)}")
+
+        def openModal(event=None):
+            """
+            Opens the Add Channel modal.
+            """
+            document.getElementById("overlay").style.display = "block"
+            document.getElementById("channelModal").style.display = "block"
+            
+        def closeModal(event=None):
+            """
+            Closes the Add Channel modal.
+            """
+            document.getElementById("overlay").style.display = "none"
+            document.getElementById("channelModal").style.display = "none"
+
+        async def addChannel(event=None):
+            """
+            Handles the creation of a new channel.
+            """
+            channel_name = document.getElementById("channel-name").value.strip()
+            if channel_name:
+                await save_channel(channel_name)
+            closeModal()
+
+        def setup_event_listeners():
+            """
+            Sets up event listeners to avoid the borrowed proxy issue.
+            """
+            global openModal_proxy, closeModal_proxy, addChannel_proxy
+            
+            # Create proxies
+            openModal_proxy = create_proxy(openModal)
+            closeModal_proxy = create_proxy(closeModal)
+            addChannel_proxy = create_proxy(addChannel)
+            
+            # Add event listeners
+            add_channel_button = document.querySelector(".add-channel")
+            create_channel_btn = document.getElementById("create-channel-btn")
+            cancel_modal_btn = document.getElementById("cancel-modal-btn")
+        
+            if add_channel_button:
+                add_channel_button.addEventListener("click", openModal_proxy)
+            if create_channel_btn:
+                create_channel_btn.addEventListener("click", addChannel_proxy)
+            if cancel_modal_btn:
+                cancel_modal_btn.addEventListener("click", closeModal_proxy)
+
         # Initialize everything
         init_all()
+        
+        # Set up channel event listeners after a short delay to ensure DOM is ready
+        setTimeout(create_proxy(setup_event_listeners), 100)
 
         def show_chat_dropdown(event, chat_id):
             """
