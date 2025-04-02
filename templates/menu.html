@@ -66,7 +66,13 @@
                             <img src="{{ member.profile_pic | safe }}" alt="{{ member.username }}" class="member-pic">
                         {% endfor %}
                     </div>
-                    <span class="project-options">...</span>
+                    <div class="project-progress-container">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: {{ project.overall_progress }}%;"></div>
+                        </div>
+                        <span class="progress-text">{{ project.overall_progress }}%</span>
+                    </div>
+                    
                 </div>
             {% endfor %}
         </div>

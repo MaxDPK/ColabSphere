@@ -122,6 +122,7 @@ async def menu(request: Request, user: str):
         return RedirectResponse("/login", status_code=303)
 
     projects = db.get_user_projects(user_data.username)
+    
     profile_pic = "/static/profile_pics/default.png"  # Default image
     
     if user_data.profile_pic_data:
@@ -141,6 +142,7 @@ async def menu(request: Request, user: str):
 
         except Exception as e:
             print("Error converting profile picture:", e)
+
 
     recent_projects = recent_projects_store.get(user, [])[:3]
      # ✅ Fix: Set `project` as an empty dictionary if no projects exist
@@ -207,9 +209,9 @@ async def project_hub(request: Request, project_code: str, user: str):
         task for task in all_tasks if isinstance(task.get("assigned_to"), list) and user in task["assigned_to"]
     ]
 
-    print(f"All Tasks: {json.dumps(all_tasks, indent=2)}")  # ✅ Debug all tasks
-    print(f"Assigned Tasks for {user}: {json.dumps(assigned_tasks, indent=2)}")  # ✅ Debug assigned tasks
-
+    total_done = sum(task["completed_seconds"] for task in all_tasks)
+    total_required = sum(task["hours_to_complete"] * 3600 for task in all_tasks)
+    overall_progress = round((total_done / total_required) * 100, 1) if total_required > 0 else 0
     
     if not any(chat.chat_id == "general1" for chat in project.chats):
         project.create_general_chat()
@@ -234,7 +236,8 @@ async def project_hub(request: Request, project_code: str, user: str):
         "members": project.members,
         "user": user,
         "assigned_tasks": assigned_tasks,
-        "all_tasks": all_tasks  # ✅ Send all tasks for reference
+        "all_tasks": all_tasks,
+        "overall_progress": overall_progress
     })
 
 @app.get("/get_recent_projects")

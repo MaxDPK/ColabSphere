@@ -154,7 +154,6 @@ class Database:
         return self.root.projects.get(project_code)
 
     def get_user_projects(self, username):
-        """Retrieve all projects associated with a user."""
         user = self.get_user(username)
         if not user:
             return []
@@ -177,12 +176,21 @@ class Database:
 
                         members_info.append({"username": member, "profile_pic": profile_pic})
 
+                # ⬇️ Calculate progress here
+                gantt_chart = getattr(project, "gantt_chart", [])
+                total_done = sum(int(t.get("completed_seconds", 0)) for t in gantt_chart)
+                total_required = sum(int(t.get("hours_to_complete", 1)) * 3600 for t in gantt_chart)
+                overall_progress = round((total_done / total_required) * 100, 1) if total_required > 0 else 0
+
                 projects.append({
                     "name": project.name,
                     "code": project.code,
-                    "members": members_info
+                    "members": members_info,
+                    "overall_progress": overall_progress  # ✅ Include this
                 })
+
         return projects
+
 
     def add_user_to_project(self, username, project_code):
         """Add a user to a project."""
