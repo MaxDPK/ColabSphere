@@ -1516,7 +1516,8 @@
                 clicked_inside_icon = event.target.closest("#calendar-icon")
                 clicked_inside_modal = (
                     event.target.closest("#taskModal") or 
-                    event.target.closest("#editTaskModal")
+                    event.target.closest("#editTaskModal") or
+                    event.target.closest(".gantt-task-modal")
                 )
 
                 # ✅ Do nothing if clicking inside modals, calendar icon, or popup
