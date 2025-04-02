@@ -2199,7 +2199,10 @@
                     # ✅ Add Gantt modal click
                     def handle_gantt_click(event, task=visible_task):
                         event.stopPropagation()
-                        open_gantt_task_modal(task)
+                        click_x = event.pageX
+                        click_y = event.pageY
+                        open_gantt_task_modal(task, click_x, click_y)
+                    
 
                     task_item._gantt_click_proxy = create_proxy(handle_gantt_click)
                     task_item.addEventListener("click", task_item._gantt_click_proxy)
@@ -2214,7 +2217,7 @@
             update_more_indicator(task_date, day_cell)
 
 
-        def open_gantt_task_modal(task):
+        def open_gantt_task_modal(task, click_x=None, click_y=None):
             from js import document
         
             # Remove existing modal if any
@@ -2298,17 +2301,48 @@
             # Close button
             close_btn = modal.querySelector("#close-gantt-modal")
             close_btn.addEventListener("click", create_proxy(lambda e: modal.remove()))
+
+            close_btn.style.position = "absolute"
+            close_btn.style.top = "8px"
+            close_btn.style.right = "12px"
+            close_btn.style.fontSize = "18px"
+            close_btn.style.cursor = "pointer"
+            close_btn.style.color = "#888"
+            close_btn.style.fontWeight = "bold"
+
+            # Optional: Add hover effect
+            close_btn.addEventListener("mouseenter", create_proxy(lambda e: setattr(close_btn.style, "color", "#e53935")))
+            close_btn.addEventListener("mouseleave", create_proxy(lambda e: setattr(close_btn.style, "color", "#888")))
+
         
-            # Style
-            modal.style.position = "fixed"
-            modal.style.top = "50%"
-            modal.style.left = "50%"
-            modal.style.transform = "translate(-50%, -50%)"
+          
+            # Style the modal
+            modal.style.position = "absolute"
             modal.style.backgroundColor = "white"
-            modal.style.padding = "20px"
+            modal.style.padding = "16px"
             modal.style.border = "1px solid #ccc"
             modal.style.zIndex = "10000"
-            modal.style.borderRadius = "10px"
+            modal.style.borderRadius = "12px"
+            modal.style.width = "350px"  # ✅ Smaller width
+            modal.style.boxShadow = "0 6px 16px rgba(0,0,0,0.2)"
+            modal.style.fontSize = "14px"
+
+
+            # ✅ Fallback to center if no click position given
+            if click_x is None:
+                click_x = window.innerWidth / 2
+            if click_y is None:
+                click_y = window.innerHeight / 2
+
+            # ✅ Make sure it doesn’t go off screen
+            max_x = window.innerWidth - 360
+            max_y = window.innerHeight - 250
+
+            modal.style.left = f"{min(click_x, max_x)}px"
+            modal.style.top = f"{min(click_y, max_y)}px"
+
+
+            
 
             def handle_gantt_modal_outside_click(event):
                 modal = document.querySelector(".gantt-task-modal")
