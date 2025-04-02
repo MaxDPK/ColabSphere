@@ -1005,3 +1005,47 @@ body.calendar-open {
     background-color: #dec5a3;
 }
 
+.gantt-task {
+    border: 2px dashed #000000 !important;
+    font-weight: bold;
+    opacity: 0.85;
+
+}
+
+.avatar-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.avatar {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid #aaa;
+}
+
+.gantt-task-modal {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    max-width: 400px;
+    width: 100%;
+}
+.gantt-user-avatars {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+.gantt-user-avatars img.avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+}
+.progress-bar {
+    width: 100%;
+    background-color: #ddd;
+    border-radius: 5px;
+    overflow: hidden;
+    margin-top: 5px;
+}
+

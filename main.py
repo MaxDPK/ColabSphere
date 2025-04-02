@@ -447,31 +447,99 @@ async def save_gantt_chart(data: dict = Body(...)):
     project_code = data.get("project_code")
     activities = data.get("activities", [])
 
+    # Make sure project exists
+    project = db.get_project(project_code)
+    if not project:
+        return JSONResponse(content={"error": "Project not found"}, status_code=404)
+
     for activity in activities:
         if isinstance(activity.get("assigned_to"), str):
             assigned_users = activity["assigned_to"].strip()
             activity["assigned_to"] = assigned_users.split(";") if assigned_users else []
 
-        # ✅ Ensure `completed_seconds` is always initialized to 0 (for tasks, not milestones)
         if "work_hours_per_day" in activity and "days" in activity:
             if "completed_seconds" not in activity:
-                activity["completed_seconds"] = 0  # Default to 0
+                activity["completed_seconds"] = 0
 
     success, message = db.save_gantt_chart(project_code, activities)
 
     if success:
-        # Notify WebSocket users
+        # Notify Gantt clients
         if project_code in project_connections:
             for connection in project_connections[project_code]:
                 await connection.send_json({
                     "action": "gantt_chart_update",
                     "activities": activities
                 })
+
+        # Push deadlines to calendar
+        if not hasattr(project, "tasks"):
+            project.tasks = {}
+
+        for activity in activities:
+            if "end_date" in activity:
+                assigned_users = []
+                for username in activity.get("assigned_to", []):
+                    user = db.get_user(username)
+                    if user:
+                        if user.profile_pic_data:
+                            encoded = base64.b64encode(user.profile_pic_data).decode()
+                            mime_type = "image/png" if user.profile_pic_data[:2] != b'\xff\xd8' else "image/jpeg"
+                            profile_pic = f"data:{mime_type};base64,{encoded}"
+                        else:
+                            profile_pic = "/static/profile_pics/default.png"
+
+                        assigned_users.append({
+                            "username": user.username,
+                            "profile_pic": profile_pic
+                        })
+
+                calendar_task = {
+                    "id": f"gantt-{activity['row_num']}",
+                    "date": activity["end_date"],
+                    "description": activity["name"],
+                    "user": "system",
+                    "color": "#fbc02d",
+                    "label": "Deadline",
+                    "time": None,
+                    "is_all_day": True,
+                    "assigned_to": assigned_users,
+                    "start_date": activity.get("start_date", ""),
+                    "predecessor": activity.get("predecessor", ""),
+                    "completed_seconds": activity.get("completed_seconds", 0),
+                    "hours_to_complete": int(activity.get("hours_to_complete", 1))
+                }
+
+
+
+                if activity["end_date"] not in project.tasks:
+                    project.tasks[activity["end_date"]] = []
+
+                project.tasks[activity["end_date"]] = [
+                    t for t in project.tasks[activity["end_date"]]
+                    if not t["id"].startswith("gantt-") or t["id"] != calendar_task["id"]
+                ]
+
+                project.tasks[activity["end_date"]].append(calendar_task)
+
+                # Notify calendar clients
+                if project_code in task_connections:
+                    for connection in task_connections[project_code]:
+                        await connection.send_json({
+                            "action": "task_update",
+                            "task": calendar_task
+                        })
+
+        project._p_changed = True
+        transaction.commit()
+
     return {"message": message}
 
 
 @app.post("/update_task_progress")
 async def update_task_progress(data: dict = Body(...)):
+    import base64
+
     project_code = data.get("project_code")
     task_name = data.get("task_name")
     assigned_to = data.get("assigned_to")
@@ -489,19 +557,17 @@ async def update_task_progress(data: dict = Body(...)):
     updated = False
     for task in project.gantt_chart:
         if task.get("name") == task_name and sorted(task.get("assigned_to", [])) == sorted(assigned_to):
-
             prev_seconds = task.get("completed_seconds", 0)
 
-            # ✅ Only update if the value has actually changed
             if completed_seconds > prev_seconds:
-                task["completed_seconds"] = completed_seconds  # Save in DB
+                task["completed_seconds"] = completed_seconds
                 updated = True
                 print(f"✅ Task match found: Updating completed_time from {prev_seconds}s to {completed_seconds}s")
 
     if updated and completed_seconds > prev_seconds:
         success, message = db.save_gantt_chart(project_code, project.gantt_chart)
 
-        # ✅ Only send WebSocket update if the database save was successful
+        # ✅ Send to Gantt viewers (progress bar UI)
         if success and project_code in project_connections:
             update_message = {
                 "action": "update_progress",
@@ -510,16 +576,77 @@ async def update_task_progress(data: dict = Body(...)):
                 "completed_seconds": completed_seconds,
                 "formatted_time": f"{completed_seconds // 3600}h {(completed_seconds % 3600) // 60}m {completed_seconds % 60}s"
             }
-            print(f"📡 Sending WebSocket update: {update_message}")
+            print(f"📡 Sending WebSocket update to Gantt view: {update_message}")
 
             for connection in project_connections[project_code]:
                 await connection.send_json(update_message)
 
-        return {"success": success, "message": message}
+        # ✅ Also update the Gantt calendar task
+        if not hasattr(project, "tasks"):
+            project.tasks = {}
 
+        for task in project.gantt_chart:
+            if task.get("name") == task_name and sorted(task.get("assigned_to", [])) == sorted(assigned_to):
+                end_date = task.get("end_date")
+                if not end_date:
+                    continue
+
+                # Prepare profile picture data
+                assigned_users_with_pic = []
+                for username in assigned_to:
+                    user = db.get_user(username)
+                    if user:
+                        if user.profile_pic_data:
+                            encoded = base64.b64encode(user.profile_pic_data).decode()
+                            mime_type = "image/png" if user.profile_pic_data[:2] != b'\xff\xd8' else "image/jpeg"
+                            profile_pic = f"data:{mime_type};base64,{encoded}"
+                        else:
+                            profile_pic = "/static/profile_pics/default.png"
+
+                        assigned_users_with_pic.append({
+                            "username": user.username,
+                            "profile_pic": profile_pic
+                        })
+
+                calendar_task = {
+                    "id": f"gantt-{task['row_num']}",
+                    "date": end_date,
+                    "description": task["name"],
+                    "user": "system",
+                    "color": "#fbc02d",
+                    "label": "Deadline",
+                    "time": None,
+                    "is_all_day": True,
+                    "assigned_to": assigned_users_with_pic,
+                    "start_date": task.get("start_date", ""),
+                    "predecessor": task.get("predecessor", ""),
+                    "completed_seconds": completed_seconds,
+                    "hours_to_complete": int(task.get("hours_to_complete", 1))
+                }
+
+                # Replace existing Gantt calendar task
+                project.tasks[end_date] = [
+                    t for t in project.tasks.get(end_date, [])
+                    if not t["id"].startswith("gantt-") or t["id"] != calendar_task["id"]
+                ]
+                project.tasks[end_date].append(calendar_task)
+
+                # ✅ Send update to calendar
+                if project_code in task_connections:
+                    for connection in task_connections[project_code]:
+                        await connection.send_json({
+                            "action": "task_update",
+                            "task": calendar_task
+                        })
+
+        project._p_changed = True
+        transaction.commit()
+
+        return {"success": success, "message": message}
 
     print("❌ Task not found in the database!")
     return {"success": False, "message": "Task not found"}
+
 
 @app.get("/get_task_progress")
 async def get_task_progress(project_code: str, task_name: str, assigned_to: str):
