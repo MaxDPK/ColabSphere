@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Project Hub</title>
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
     <link href="https://fonts.googleapis.com/css2?family=Literata:wght@400&display=swap" rel="stylesheet">
@@ -11,123 +13,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/project_hub.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
-    <style>
-    /* 🟢 Main Task Container */
-    .task-section {
-        width: 50%; /* ✅ Makes it smaller */
-        max-width: 600px; /* ✅ Limits max width */
-        margin: 20px auto; /* ✅ Centers the container */
-        padding: 15px;
-        background-color: #f0f0f0; /* ✅ Light grey background */
-        border-radius: 10px;
-        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* ✅ Soft shadow */
-    }
-
-    /* 🟢 Task List */
-    #assigned-tasks {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    #assigned-tasks li {
-        background: white; /* ✅ White background for each task */
-        padding: 10px;
-        margin-bottom: 10px;
-        border-radius: 8px;
-        box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    /* 🟢 Progress Bar Container */
-    .progress-container {
-        width: 100%;
-        height: 8px; /* ✅ Much smaller */
-        background-color: #ddd; /* ✅ Light grey */
-        border-radius: 4px;
-        overflow: hidden;
-        margin-top: 5px;
-    }
-
-    /* 🟢 Progress Bar Container */
-    .progress-container {
-        display: flex;
-        align-items: center;
-        width: 100%;
-        height: 8px; /* ✅ Small progress bar */
-        background-color: #ddd;
-        border-radius: 4px;
-        overflow: hidden;
-        position: relative;
-        margin-top: 5px;
-    }
-
-    /* 🟢 Actual Progress Bar */
-    .progress-bar {
-        height: 100%;
-        width: 0%;
-        background-color: #4CAF50;
-        transition: width 0.3s ease-in-out;
-    }
-
-    /* 🟢 Progress Percentage (Right Aligned) */
-    .progress-text {
-        font-size: 12px;
-        margin-left: 8px;
-        white-space: nowrap;
-    }
-
-
-    /* 🟢 Buttons */
-    .task-buttons {
-        display: flex;
-        gap: 10px;
-        margin-top: 8px;
-    }
-
-    .start-work, .stop-work {
-        padding: 6px 10px;
-        border: none;
-        cursor: pointer;
-        border-radius: 4px;
-    }
-
-    .start-work {
-        background-color: #4CAF50;
-        color: white;
-    }
-
-    .stop-work {
-        background-color: #f44336;
-        color: white;
-    }
-
-    /* 🟢 Task Item */
-    .task-item {
-        display: flex;
-        flex-direction: column;
-        padding: 10px;
-    }
-
-    /* 🟢 Task Header - Contains Name and Predecessors */
-    .task-header {
-        display: flex;
-        justify-content: space-between; /* ✅ Aligns name left, predecessor right */
-        align-items: center;
-    }
-
-    /* 🟢 Task Predecessors */
-    .task-predecessors {
-        font-size: 14px;
-        color: gray;
-        font-weight: bold;
-        text-align: right;
-    }
-
-</style>
- 
 </head>
 <body>
     <div class="sidebar">
+        <div class="project-header">
+            <h1>Project: {{ project.name }}</h1>
+        </div>
         <h2>CHANNEL</h2>
         <div id="loading-message">Loading channels...</div>  
         <div class="channel-section" id="channel-list" style="display: none;">  
@@ -142,36 +33,70 @@
             </ul>
         </div>
 
-        <h2>DIRECT MESSAGE</h2>
-        <div class="direct-message-section" id="direct-message-list">
-            <p>🧑‍💻 Sam</p>
-            <p>👨‍🏛️ John</p>
-            <p>🎨 Kattie</p>
-        </div>
+       
     </div>
     
     <div class="main-content">
-        <div class="project-header">
-            <h1>Project: {{ project.name }}</h1>
-            <button class="toggle-btn" py-click="toggle_project_details">▶</button>
-        </div>
+        <!-- Add Settings Button -->
+        <button id="settings-btn" class="settings-btn">
+            <i class="fas fa-cog">⚙️</i>
+        </button>
         
-        <!-- Hidden project details initially -->
-        <div id="project-details" style="display: none;">
-            <h2>Project Code: {{ project.code }}</h2>
-            <h3>Team Members:</h3>
-            <ul id="member-list">
+        
+
+        <!-- Settings Modal -->
+        <!-- Settings Modal -->
+        <!-- ✅ Settings Modal Overlay (place near end of <body>) -->
+        <div class="modal-overlay" id="settings-overlay" style="display: none;"></div>
+
+        <!-- ✅ Settings Modal -->
+        <div id="settings-modal" class="settings-modal" style="display: none;">
+        <div class="modal-content">
+            <button class="close-modal-btn">&times;</button>
+            <h2>Project Settings</h2>
+
+            <!-- Project Details Section -->
+            <div class="settings-section">
+            <h3>Project Details</h3>
+            <div class="detail-item">
+                <label>Project Code:</label>
+                <span id="project-code" class="project-code">{{ project.code }}</span>
+
+                <button id="copy-project-code" class="copy-btn">Copy</button>
+            </div>
+            </div>
+
+            <!-- Team Members Section -->
+            <div class="settings-section">
+            <h3>Team Members</h3>
+            <ul class="settings-member-list">
                 {% for member in members %}
-                    <li>{{ member }}</li>
+                <li class="member-item">
+                    <span class="member-name">{{ member }}</span>
+                </li>
                 {% endfor %}
             </ul>
+            </div>
+
+            <!-- Project Actions Section -->
+            <div class="settings-section">
+            <h3>Project Actions</h3>
+            <div class="action-buttons">
+                <button class="action-btn invite-btn">Invite Team Member</button>
+                <button class="action-btn export-btn">Export Project Data</button>
+                <button class="action-btn leave-btn">Leave Project</button>
+            </div>
+            </div>
         </div>
+        </div>
+
         
-    
         <div class="seating-container">
-            <div class="table"></div> <!-- The table -->
-            <div id="seating-area"></div> <!-- Seats will be dynamically added here -->
-        </div>
+            <img src="/static/tbandchair.png" alt="Table and Chairs Layout" class="table-and-chairs">
+            <div id="seating-area">
+              <!-- Profile pictures will be dynamically added by the WebSocket update_online_members function -->
+            </div>
+          </div>
         
         
     
@@ -349,20 +274,18 @@
     </div>
 
 
-    <h2>Team Members</h2>
-    <ul id="members-list">
-        {% for member in members %}
-            <li class="member" data-username="{{ member }}">
-                {{ member }} - <span class="status">Offline</span>
-            </li>
-        {% endfor %}
-    </ul>
- 
-    <div class="task-section">
-        <h2>My Assigned Tasks</h2>
+    <!-- Add task section icon -->
+    <div id="task-section-icon" class="task-section-icon">📋</div>
+
+    <!-- Task Section -->
+    <div class="task-section" style="display: none;">
+        <div class="task-section-header">
+            <h2>My Assigned Tasks</h2>
+            <button class="pin-task-section">📌</button>
+        </div>
         <ul id="assigned-tasks">
             {% set row_to_task = {} %}
-            {% for task in all_tasks %}  {# ✅ Use all_tasks instead of assigned_tasks #}
+            {% for task in all_tasks %}
                 {% set _ = row_to_task.update({task["row_num"]: task["name"]}) %}
             {% endfor %}
         
@@ -422,9 +345,6 @@
                 </li>
             {% endfor %}
         </ul>
-        
-        
-        
     </div>
     
     
@@ -432,14 +352,19 @@
     <py-script>
         import asyncio
         import json
-        from js import document, WebSocket, setTimeout, console, window
+        from js import document, WebSocket, setTimeout, console, window, setInterval, clearInterval
+        from js import document, console, window, navigator, FormData
         from pyodide.ffi import create_proxy
         from pyodide.http import pyfetch
         import math
         import datetime
+    
+
+        console.log("📦 Script loaded") 
         
         # Global variables (formerly class properties)
-        project_code = "{{ project.code }}"
+        
+        project_code = document.getElementById("project-code").textContent
         username = "{{ user }}"
         ws = None  # WebSocket for project members
         ws_tasks = None  # WebSocket for real-time tasks
@@ -451,6 +376,11 @@
         message_proxy = None
         task_message_proxy = None
         close_proxy = None
+        
+        # Create persistent proxies for channel modal
+        openModal_proxy = None
+        closeModal_proxy = None
+        addChannel_proxy = None
         
         # Calendar variables
         today = datetime.date.today()
@@ -1203,7 +1133,8 @@
         
             if task_key in work_sessions:
                 if work_sessions[task_key]["interval"] is not None:
-                    clearInterval(work_sessions[task_key]["interval"])  # ✅ Stop the timer
+                    clearInterval(work_sessions[task_key]["interval"])
+
                     work_sessions[task_key]["interval"] = None  # Mark as stopped
         
                 final_completed_seconds = work_sessions[task_key]["initial_completed"] + work_sessions[task_key]["elapsed_time"]
@@ -1659,43 +1590,58 @@
             setTimeout(lambda: asyncio.ensure_future(connect_websocket()), 1000)
             
         def update_online_members(online_users):
+            # First, hide the seating area while updating to prevent flashing
             seating_area = document.getElementById("seating-area")
+            seating_area.style.visibility = "hidden"
             seating_area.innerHTML = ""
-    
-            # Positions to arrange chairs around the table
-            num_seats = len(online_users)
-            radius = 170  # Distance from the center
-            table_center_x = 250
-            table_center_y = 220
-    
-            angle_step = 360 / max(num_seats, 1)  # Spread evenly around the table
-    
-            for i, (member, profile_pic_url) in enumerate(online_users.items()):
-                angle = math.radians(i * angle_step)
-                seat_x = table_center_x + radius * math.cos(angle)
-                seat_y = table_center_y + radius * math.sin(angle)
-    
-                seat = document.createElement("div")
-                seat.classList.add("seat")
-                seat.style.left = f"{seat_x}px"
-                seat.style.top = f"{seat_y}px"
-    
-                profile_pic = document.createElement("div")
-                profile_pic.classList.add("profile-pic")
-                profile_pic.style.backgroundImage = f"url('{profile_pic_url}')"
-    
-                status_indicator = document.createElement("div")
-                status_indicator.classList.add("status-indicator")
-    
-                # Add name label
-                name_label = document.createElement("div")
-                name_label.classList.add("member-name")
-                name_label.textContent = member
-    
-                profile_pic.appendChild(status_indicator)
-                seat.appendChild(profile_pic)
-                seat.appendChild(name_label)
-                seating_area.appendChild(seat)
+            
+            # Define fixed positions for chairs in the image - adjusted to match the purple chairs
+            chair_positions = [
+                {"left": "770px", "top": "120px"},   # Top right chair
+                {"left": "770px", "top": "230px"},   # Second right chair
+                {"left": "770px", "top": "340px"},   # Third right chair
+                {"left": "770px", "top": "450px"},   # Bottom right chair
+                {"left": "80px", "top": "120px"},    # Top left chair
+                {"left": "80px", "top": "230px"},    # Second left chair
+                {"left": "80px", "top": "340px"},    # Third left chair
+                {"left": "80px", "top": "450px"}     # Bottom left chair
+            ]
+            
+            # Ensure online_users is properly initialized before proceeding
+            if online_users and len(online_users) > 0:
+                # Limit to available chairs
+                member_items = list(online_users.items())
+                available_positions = min(len(member_items), len(chair_positions))
+                
+                for i in range(available_positions):
+                    member, profile_pic_url = member_items[i]
+                    position = chair_positions[i]
+                    
+                    seat = document.createElement("div")
+                    seat.classList.add("seat")
+                    seat.style.left = position["left"]
+                    seat.style.top = position["top"]
+                    
+                    profile_pic = document.createElement("div")
+                    profile_pic.classList.add("profile-pic")
+                    # Use the profile_pic_url directly since it's already a complete data URL or default image path
+                    profile_pic.style.backgroundImage = f"url({profile_pic_url})"
+                    
+                    status_indicator = document.createElement("div")
+                    status_indicator.classList.add("status-indicator")
+                    
+                    # Add name label
+                    name_label = document.createElement("div")
+                    name_label.classList.add("member-name")
+                    name_label.textContent = member
+                    
+                    profile_pic.appendChild(status_indicator)
+                    seat.appendChild(profile_pic)
+                    seat.appendChild(name_label)
+                    seating_area.appendChild(seat)
+            
+            # Make the seating area visible again after everything is ready
+            seating_area.style.visibility = "visible"
 
         def select_color(event):
             global selected_color, selected_label
@@ -1813,8 +1759,93 @@
             
             document.getElementById("channel-list").appendChild(new_button)
         
+        async def save_channel(channel_name):
+            """
+            Sends a request to save a newly created channel with selected members.
+            """
+            try:
+                # ✅ Get all selected members
+                member_checkboxes = document.querySelectorAll(".member-checkbox:checked")
+                selected_members = [checkbox.value for checkbox in member_checkboxes]
+        
+                # ✅ Ensure we have at least one member
+                if not selected_members:
+                    console.log("⚠️ Error: At least one member must be selected!")
+                    return
+                
+                form_data = json.dumps({
+                    "project_code": project_code, 
+                    "channel_name": channel_name,
+                    "members": selected_members  # ✅ Include selected members in request
+                })
+                
+                response = await pyfetch(
+                    "/add_channel", 
+                    method="POST", 
+                    body=form_data, 
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                data = await response.json()
+                console.log(data["message"])
+        
+                # Refresh the list of channels
+                await fetch_channels()
+            
+            except Exception as e:
+                console.log(f"Error saving channel: {str(e)}")
+
+        def openModal(event=None):
+            """
+            Opens the Add Channel modal.
+            """
+            document.getElementById("overlay").style.display = "block"
+            document.getElementById("channelModal").style.display = "block"
+            
+        def closeModal(event=None):
+            """
+            Closes the Add Channel modal.
+            """
+            document.getElementById("overlay").style.display = "none"
+            document.getElementById("channelModal").style.display = "none"
+
+        async def addChannel(event=None):
+            """
+            Handles the creation of a new channel.
+            """
+            channel_name = document.getElementById("channel-name").value.strip()
+            if channel_name:
+                await save_channel(channel_name)
+            closeModal()
+
+        def setup_event_listeners():
+            """
+            Sets up event listeners to avoid the borrowed proxy issue.
+            """
+            global openModal_proxy, closeModal_proxy, addChannel_proxy
+            
+            # Create proxies
+            openModal_proxy = create_proxy(openModal)
+            closeModal_proxy = create_proxy(closeModal)
+            addChannel_proxy = create_proxy(addChannel)
+            
+            # Add event listeners
+            add_channel_button = document.querySelector(".add-channel")
+            create_channel_btn = document.getElementById("create-channel-btn")
+            cancel_modal_btn = document.getElementById("cancel-modal-btn")
+        
+            if add_channel_button:
+                add_channel_button.addEventListener("click", openModal_proxy)
+            if create_channel_btn:
+                create_channel_btn.addEventListener("click", addChannel_proxy)
+            if cancel_modal_btn:
+                cancel_modal_btn.addEventListener("click", closeModal_proxy)
+
         # Initialize everything
         init_all()
+        
+        # Set up channel event listeners after a short delay to ensure DOM is ready
+        setTimeout(create_proxy(setup_event_listeners), 100)
 
         def show_chat_dropdown(event, chat_id):
             """
@@ -2112,10 +2143,174 @@
             # ✅ Add or update +X more indicator
             update_more_indicator(task_date, day_cell)
 
+    
+
+    
+    
+   
+
+        # here
+        def init_settings_modal():
+            settings_btn = document.getElementById('settings-btn')
+            settings_modal = document.getElementById('settings-modal')
+            overlay = document.getElementById("settings-overlay")
+            copy_project_code_btn = document.getElementById('copy-project-code')
+            close_modal_btn = document.querySelector('.close-modal-btn')
+            modal_content = settings_modal.querySelector('.modal-content')
+            leave_btn = document.querySelector('.leave-btn')
+
+            # ✅ Retrieve project code safely
+            project_code_el = document.getElementById('project-code')
+            if not project_code_el or not project_code_el.textContent:
+                console.error("❌ Project code is empty or not loaded.")
+                return
+            project_code = project_code_el.textContent.strip()
+            # ✅ Other Action Buttons
+            def handle_invite(event):
+                window.alert('Invite functionality will be implemented soon!')
+
+            def handle_export(event):
+                window.alert('Export functionality will be implemented soon!')
+
+            def handle_leave(event):
+                console.log("🟥 Leave button clicked!")
+                if window.confirm("Are you sure you want to leave this project?"):
+                    # Send POST request to /leave_project
+                    async def send_leave_request():
+                        form_data = FormData.new()
+                        form_data.append("project_code", project_code)  # already defined earlier
+                        form_data.append("user", user)  # you should set this variable on load
+
+                        try:
+                            response = await fetch("/leave_project", {
+                                "method": "POST",
+                                "body": form_data
+                            })
+                            if response.ok:
+                                window.alert("You have left the project.")
+                                window.location.href = f"/menu?user={user}"
+                            else:
+                                error = await response.json()
+                                window.alert(f"❌ Failed to leave project: {error.get('error', 'Unknown error')}")
+                        except Exception as e:
+                            window.alert(f"❌ Network error: {str(e)}")
+
+                    asyncio.create_task(send_leave_request())
+
+
+            if leave_btn:
+                leave_btn.addEventListener('click', create_proxy(handle_leave))
+                console.log("🟢 Leave button listener added")
+            else:
+                console.error("❌ Leave button not found")
+
+            # ✅ Modal Open/Close Functions
+            def open_modal(event):
+                overlay.style.display = 'block'
+                settings_modal.style.display = 'block'
+                document.body.style.overflow = 'hidden'
+
+            def close_modal(event):
+                overlay.style.display = 'none'
+                settings_modal.style.display = 'none'
+                document.body.style.overflow = 'auto'
+
+            def stop_propagation(event):
+                event.stopPropagation()
+
+            # ✅ Add Event Listeners
+            if settings_btn:
+                settings_btn.addEventListener("click", create_proxy(open_modal))
+                console.log('✅ Settings button listener added')
+            else:
+                console.error('❌ Settings button not found')
+
+            if close_modal_btn:
+                close_modal_btn.addEventListener("click", create_proxy(close_modal))
+
+            if overlay:
+                overlay.addEventListener("click", create_proxy(close_modal))
+
+            if modal_content:
+                modal_content.addEventListener("click", create_proxy(stop_propagation))
+
+            # ✅ Clipboard Copy Function
+            async def copy_project_code(event):
+                try:
+                    await navigator.clipboard.writeText(project_code)
+                    show_copied_message()
+                except Exception as e:
+                    console.error("❌ Copy failed:", str(e))
+
+            def show_copied_message():
+                original_text = copy_project_code_btn.textContent
+                copy_project_code_btn.textContent = 'Copied!'
+                def reset_text():
+                    copy_project_code_btn.textContent = original_text
+                window.setTimeout(create_proxy(reset_text), 2000)
+
+            if copy_project_code_btn:
+                copy_project_code_btn.addEventListener("click", create_proxy(lambda e: asyncio.create_task(copy_project_code(e))))
+
+
+
+            
+
+
+        # ✅ Init on DOM Ready
+        def safe_init():
+            console.log("🟢 DOM ready or already loaded")
+            init_settings_modal()
+
+        if document.readyState == "loading":
+            document.addEventListener("DOMContentLoaded", create_proxy(lambda e: safe_init()))
+        else:
+            safe_init()
+
+        def initialize_task_section():
+            task_section_icon = document.getElementById("task-section-icon")
+            task_section = document.querySelector(".task-section")
+            pin_button = document.querySelector(".pin-task-section")
+            
+            if task_section_icon and task_section:
+                def toggle_task_section(event):
+                    event.stopPropagation()
+                    if not task_section.classList.contains("pinned"):
+                        if task_section.style.display == "none":
+                            task_section.style.display = "block"
+                        else:
+                            task_section.style.display = "none"
+                
+                task_section_icon._toggle_proxy = create_proxy(toggle_task_section)
+                task_section_icon.addEventListener("click", task_section_icon._toggle_proxy)
+            
+            if pin_button:
+                def toggle_pin(event):
+                    event.stopPropagation()
+                    task_section.classList.toggle("pinned")
+                    pin_button.classList.toggle("pinned")
+                    # When pinning, ensure the section is visible
+                    if task_section.classList.contains("pinned"):
+                        task_section.style.display = "block"
+                
+                pin_button._pin_proxy = create_proxy(toggle_pin)
+                pin_button.addEventListener("click", pin_button._pin_proxy)
+            
+            # Close task section when clicking outside (only if not pinned)
+            def handle_document_click(event):
+                if task_section and task_section.style.display == "block" and not task_section.classList.contains("pinned"):
+                    if not event.target.closest(".task-section") and not event.target.closest("#task-section-icon"):
+                        task_section.style.display = "none"
+            
+            document._task_section_click_proxy = create_proxy(handle_document_click)
+            document.addEventListener("click", document._task_section_click_proxy)
+
+        # Add this to your initialization code
+        initialize_task_section()
+
     </py-script>
 
 
-
- 
+   
 </body>
 </html>
