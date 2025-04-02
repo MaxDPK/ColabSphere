@@ -24,7 +24,7 @@ h1 {
     background: #e6d6c1;
 }
 h2 {
-    font-size: 18px;
+    font-size: 16px;
     color: #354d2f;
 }
 .channel-section, .direct-message-section {
@@ -174,15 +174,32 @@ h2 {
     background: #f0f0f0;
 }
 
-/* === Main Seating Area === */
 .seating-container {
     position: relative;
-    width: 600px;
-    height: 500px;
-    margin: 50px auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    margin: 20px auto;
+    width: 100%;
+    max-width: 1200px; /* Increased from 800px to 1200px */
+    height: auto;
+  }
+  
+  .table-and-chairs {
+    width: 100%;
+    height: auto;
+    display: block; /* Ensures proper sizing */
+  }
+  
+  #seating-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%; 
+    height: 100%;
+  }
+  
+.spline-embed-wrapper iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
 }
 
 /* Disable body scrolling when calendar is open */
@@ -192,86 +209,222 @@ body.calendar-open {
 
 /* === Oval Table in the Center === */
 .table {
-    width: 350px;
-    height: 200px;
-    background-color: #b88c5a;
+    width: 300px; /* reduced from 350px */
+    height: 170px; /* reduced from 200px */
+    background: linear-gradient(145deg, #c99b6c, #b88c5a);
     border-radius: 50%;
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+    box-shadow: 
+        0 10px 20px rgba(0, 0, 0, 0.3),
+        0 0 0 2px rgba(255, 255, 255, 0.1),
+        inset 0 0 20px rgba(0, 0, 0, 0.2),
+        inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+    transition: all 0.3s ease;
 }
 
-/* === Seats (Chairs) Styling === */
+
+
+.table:hover {
+    transform: translate(-50%, -50%) scale(1.02);
+    box-shadow: 
+        0 15px 30px rgba(0, 0, 0, 0.4),
+        0 0 0 2px rgba(255, 255, 255, 0.1),
+        inset 0 0 30px rgba(0, 0, 0, 0.3),
+        inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
 .seat {
-    width: 90px;
-    height: 120px;
-    background-image: url('/static/chair.png'); /* Use the chair image */
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
     position: absolute;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    transform: translate(-50%, -50%);
 }
 
-/* === Profile Picture on Chair === */
 .profile-pic {
-    width: 50px; /* Circular effect */
-    height: 50px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
-    position: absolute;
-    top: 15px; /* Adjust so it sits on the chair */
-    left: 50%;
-    transform: translateX(-50%);
     background-size: cover;
     background-position: center;
-    border: 3px solid white; /* Optional */
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    position: relative;
+    z-index: 10;
 }
 
-/* === Online Status Indicator === */
+/* Status indicator inside profile pic */
 .status-indicator {
-    position: absolute;
-    top: 5px;
-    right: 5px;
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: green;
+    background-color: #4CAF50; /* Online - green */
     border: 2px solid white;
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
 }
 
-        /* Project Header - Aligns H1 and Button */
+/* Project Header Styling */
 .project-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #b88c5a;
+}
+.project-code {
+    background-color: #f3f3f3;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: monospace;
+    margin-right: 8px;
 }
 
-/* Triangle Button (▶) */
+.project-header h1 {
+    font-family: "Amiri Quran", serif;
+    font-size: 25px;
+    color: #3B372E;
+    margin: 0;
+}
+
 .toggle-btn {
     background: none;
     border: none;
     cursor: pointer;
+    font-size: 24px;
+    color: #3B372E;
+    padding: 10px;
+    margin-left: 10px;
+    transition: transform 0.3s ease;
+    vertical-align: middle;
+}
+
+.toggle-btn.open {
+    transform: rotate(180deg);
+}
+
+/* Project Details Section */
+#project-details {
+    background-color: rgba(222, 197, 163, 0.3);
+    padding: 20px 40px;
+    margin: -30px 0 30px 0;
+    border-bottom: 1px solid #dec5a3;
+}
+
+#project-details h2 {
+    font-family: "Literata", serif;
+    font-size: 24px;
+    color: #3B372E;
+    margin: 0 0 15px 0;
+}
+
+#project-details h3 {
+    font-family: "Literata", serif;
     font-size: 20px;
-    transform: rotate(0deg);
+    color: #3B372E;
+    margin: 20px 0 10px 0;
+}
+
+#member-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.sketchfab-embed-wrapper {
+    max-width: 700px;
+    margin: 0 auto;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+
+#member-list li {
+    font-family: "Literata", serif;
+    font-size: 16px;
+    color: #5a5346;
+    padding: 5px 0;
+}
+
+/* Adjust main content for new header */
+.main-content {
+    padding-top: 0;
+}
+
+
+/* Task section adjustment */
+.task-section {
+    position: fixed;
+    top: 100px;  /* This ensures it's below the icons which are at 30px */
+    right: 30px;
+    width: 350px;
+    background-color: #fff8ee;
+    border-radius: 15px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    max-height: calc(100vh - 120px); /* Adjusted to account for top position */
+    overflow-y: auto;
+    z-index: 100;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.task-section.pinned {
+    border: 2px solid #b88c5a;
+    box-shadow: 0 8px 16px rgba(184, 140, 90, 0.2);
+}
+
+/* Task Section Header */
+.task-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.pin-task-section {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 5px;
     transition: transform 0.3s ease;
 }
 
-/* Rotated Triangle when Open */
-.toggle-btn.open {
-    transform: rotate(90deg);
+.pin-task-section.pinned {
+    transform: rotate(45deg);
 }
 
-    /* 📌 Small Calendar Icon */
+/* Task Section Icon */
+.task-section-icon {
+    position: fixed;
+    top: 30px;
+    right: 30px;
+    width: 50px;
+    height: 50px;
+    background-color: #f4c542;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 50px;
+    font-size: 24px;
+    cursor: pointer;
+    z-index: 1001;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.task-section-icon:hover {
+    transform: scale(1.1);
+    background-color: #f5d042;
+}
+
+/* Calendar Icon Container */
 #calendar-container {
     position: fixed;
     top: 30px;
-    right: 60px;
+    right: 90px;
+    z-index: 1001;
 }
 
+    /* 📌 Small Calendar Icon */
 .calendar-icon {
     width: 50px;
     height: 50px;
@@ -289,7 +442,7 @@ body.calendar-open {
     padding: 20px;
     border-radius: 15px;
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-    z-index: 9999;  /* Increased to be higher than all other elements */
+    z-index: 9000 !important;  /* Added !important */
     width: 1000px;
     height: 600px;
     position: fixed;
@@ -419,18 +572,17 @@ body.calendar-open {
 /* Tasks Popup */
 .tasks-popup {
     display: none;
-    position: absolute;
+    position: fixed !important;
     background: white;
     border: 1px solid #ccc;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     padding: 12px;
-   
     min-width: 250px;
     max-width: 300px;
     max-height: 400px;
     overflow-y: auto;
-    z-index: 999;
+    z-index: 99999 !important;  /* Added !important to override inline styles */
 }
 
 .tasks-popup h3 {
@@ -1003,5 +1155,364 @@ body.calendar-open {
 
 .time-option:hover {
     background-color: #dec5a3;
+}
+
+/* 🎯 Updated Task Section Styles */
+.task-section {
+    width: 350px;
+    position: fixed;
+    top: 20px;
+    right: 30px;
+    background-color: #fff8ee;
+    border-radius: 15px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    max-height: calc(100vh - 50px);
+    overflow-y: auto;
+    z-index: 100;
+}
+
+.task-section h2 {
+    font-family: "Amiri Quran", serif;
+    font-size: 24px;
+    color: #3B372E;
+    margin-bottom: 20px;
+    text-align: center;
+    font-weight: 300;
+    letter-spacing: 0.5px;
+}
+
+#assigned-tasks {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#assigned-tasks li {
+    background: white;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+    border: 1px solid #dec5a3;
+}
+
+.task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.task-header strong {
+    font-family: "Literata", serif;
+    color: #3B372E;
+    font-size: 16px;
+}
+
+.task-predecessors {
+    font-size: 12px;
+    color: #5a5346;
+    font-style: italic;
+}
+
+.progress-container {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 8px;
+    background-color: #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+    margin-top: 5px;
+}
+
+.progress-bar {
+    height: 100%;
+    width: 0%; /* This is dynamically set by JS */
+    background-color: #b88c5a; /* Updated to match theme */
+    transition: width 0.3s ease-in-out;
+}
+
+.progress-text {
+    font-size: 12px;
+    margin-left: 8px;
+    white-space: nowrap;
+    color: #5a5346;
+    font-family: "Literata", serif;
+}
+
+.task-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.start-work, .stop-work, .complete-task {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    font-family: "Literata", serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.start-work {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.start-work:hover {
+    background-color: #45a049;
+}
+
+.stop-work {
+    background-color: #f44336;
+    color: white;
+}
+
+.stop-work:hover {
+    background-color: #da190b;
+}
+
+.complete-task {
+    background-color: #354d2f;
+    color: white;
+}
+
+.complete-task:hover {
+    background-color: #2a3e26;
+}
+
+.completed-text {
+    text-align: center;
+    color: #354d2f;
+    font-family: "Literata", serif;
+    margin: 10px 0 0 0;
+}
+
+
+/* Hide Team Members section */
+#members-list {
+    display: none;
+}
+
+h2:contains("Team Members") {
+    display: none;
+}
+
+/* Settings Button */
+.settings-btn {
+    position: fixed;
+    bottom: 20px;  /* Changed from top to bottom */
+    left: 20px;    /* Changed from 220px to 20px */
+    background: rgba(222, 197, 163, 0.2);  /* Added subtle background */
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 12px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    z-index: 1000;
+    display: flex;           /* Added to center the icon */
+    align-items: center;     /* Added to center the icon */
+    justify-content: center; /* Added to center the icon */
+    width: 48px;            /* Added fixed width */
+    height: 48px;           /* Added fixed height */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); /* Added subtle shadow */
+}
+
+.settings-btn:hover {
+    background-color: rgba(222, 197, 163, 0.5);
+    transform: rotate(45deg);
+}
+
+/* Settings Modal */
+.settings-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 500px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    background-color: #fff8ee;
+    padding: 30px;
+    z-index: 8001 !important;  /* Just above the overlay but below calendar and tasks */
+    border-radius: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.settings-modal h2 {
+    font-family: "Amiri Quran", serif;
+    font-size: 32px;
+    color: #3B372E;
+    margin-bottom: 25px;
+    text-align: center;
+}
+
+.settings-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: rgba(222, 197, 163, 0.2);
+    border-radius: 10px;
+}
+
+.settings-section h3 {
+    font-family: "Literata", serif;
+    font-size: 20px;
+    color: #3B372E;
+    margin-bottom: 15px;
+}
+
+/* Project Details Styling */
+.detail-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.detail-item label {
+    font-family: "Literata", serif;
+    font-weight: bold;
+    color: #5a5346;
+}
+
+.copy-btn {
+    background: none;
+    border: 1px solid #dec5a3;
+    padding: 5px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.copy-btn:hover {
+    background-color: #dec5a3;
+}
+
+.settings-member-list {
+    list-style-type: none;
+    padding-left: 0;
+    margin-top: 10px;
+  }
+  
+  .member-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    margin-bottom: 4px;
+    border-radius: 6px;
+    background-color: #f5f5dc;
+    font-family: 'Literata', serif;
+  }
+  
+  .member-name {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 12px;
+    margin-top: 5px;
+    background-color: rgba(255, 255, 255, 0.7);
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+  .member-status {
+    font-size: 0.9em;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  
+  .member-status.online {
+    color: green;
+    background-color: #e0ffe0;
+  }
+  
+  .member-status.offline {
+    color: red;
+    background-color: #ffe0e0;
+  }
+  
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.action-btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-family: "Literata", serif;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.invite-btn {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.export-btn {
+    background-color: #b88c5a;
+    color: white;
+}
+
+.leave-btn {
+    background-color: #f44336;
+    color: white;
+}
+
+.action-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+/* Close Button */
+.settings-modal .close-modal-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #3B372E;
+}
+
+/* Modal Overlay */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 8000 !important;  /* Lower z-index to be below both calendar and tasks popup */
+}
+
+/* Calendar Popup */
+#calendar-popup {
+    z-index: 9000 !important;
+}
+
+/* Tasks Popup */
+.tasks-popup {
+    z-index: 99999 !important;
 }
 

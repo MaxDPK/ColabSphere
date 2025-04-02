@@ -1021,3 +1021,27 @@ async def get_tasks_for_month(project_code: str, year: int, month: int):
             continue
 
     return JSONResponse(content={"tasks": tasks_in_month})
+
+@app.post("/leave_project")
+async def leave_project(user: str = Form(...), project_code: str = Form(...)):
+    project = db.get_project(project_code)
+    if not project:
+        return JSONResponse(content={"error": "Project not found"}, status_code=404)
+    
+    if user not in project.members:
+        return JSONResponse(content={"error": "User is not a member of this project"}, status_code=400)
+
+    # Remove user from project members
+    project.members.remove(user)
+    project._p_changed = True
+
+    # Remove project from user’s list
+    user_obj = db.get_user(user)
+    if user_obj and project_code in user_obj.projects:
+        user_obj.projects.remove(project_code)
+        user_obj._p_changed = True
+
+    # Commit changes
+    transaction.commit()
+    
+    return JSONResponse(content={"message": "Left project successfully"})

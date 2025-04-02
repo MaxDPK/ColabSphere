@@ -235,3 +235,4 @@ class Database:
 
 # Create a global instance of the database
 db = Database()
+
