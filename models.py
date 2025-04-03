@@ -7,6 +7,7 @@ import transaction
 import base64
 from typing import List, Dict
 from persistent.list import PersistentList
+from datetime import datetime
 
 # --------- USER CLASS ---------
 class User(Persistent):
@@ -96,6 +97,79 @@ class Project(Persistent):
         transaction.commit()
         return task_entry
 
+    def calculate_overall_progress(self):
+        gantt_chart = getattr(self, "gantt_chart", [])
+        normal_tasks = [
+            t for t in gantt_chart
+            if t.get("work_hours_per_day") and t.get("days")
+        ]
+        total_done = sum(int(t.get("completed_seconds", 0)) for t in normal_tasks)
+        total_required = sum(int(t.get("hours_to_complete", 1)) * 3600 for t in normal_tasks)
+        return round((total_done / total_required) * 100, 1) if total_required > 0 else 0
+
+    def get_terminal_tasks(self):
+        gantt_chart = getattr(self, "gantt_chart", [])
+        referenced_preds = set()
+        for t in gantt_chart:
+            preds = t.get("predecessor", "")
+            referenced_preds.update(p.strip() for p in preds.split(";") if p.strip())
+
+        return [
+            (i, t) for i, t in enumerate(gantt_chart)
+            if str(i + 1) not in referenced_preds
+        ]
+
+    def calculate_status_and_days_remaining(self):
+        gantt_chart = getattr(self, "gantt_chart", [])
+        terminal_tasks = self.get_terminal_tasks()
+        today = datetime.today()
+
+        all_terminal_completed = True
+        latest_end_date = None
+
+        for index, task in terminal_tasks:
+            end = task.get("end_date")
+            if end:
+                try:
+                    end_date = datetime.strptime(end, "%Y-%m-%d")
+                    if not latest_end_date or end_date > latest_end_date:
+                        latest_end_date = end_date
+                except:
+                    pass
+
+            if task.get("work_hours_per_day") and task.get("days"):
+                # Normal task
+                completed = int(task.get("completed_seconds", 0))
+                required = int(task.get("hours_to_complete", 1)) * 3600
+                if completed < required:
+                    all_terminal_completed = False
+                    break
+            else:
+                # Milestone: check all its predecessors
+                preds = task.get("predecessor", "").split(";")
+                for pred_id in preds:
+                    if not pred_id.isdigit():
+                        continue
+                    pred_index = int(pred_id) - 1
+                    if 0 <= pred_index < len(gantt_chart):
+                        pred_task = gantt_chart[pred_index]
+                        if pred_task.get("work_hours_per_day") and pred_task.get("days"):
+                            completed = int(pred_task.get("completed_seconds", 0))
+                            required = int(pred_task.get("hours_to_complete", 1)) * 3600
+                            if completed < required:
+                                all_terminal_completed = False
+                                break
+                if not all_terminal_completed:
+                    break
+
+        if all_terminal_completed:
+            return "Completed", (latest_end_date - today).days if latest_end_date else None
+        elif latest_end_date and latest_end_date < today:
+            return "Overdue", (latest_end_date - today).days
+        else:
+            return "Ongoing", (latest_end_date - today).days if latest_end_date else None
+
+
 # --------- DATABASE CLASS ---------
 class Database:
     def __init__(self, db_path="database/data.fs"):
@@ -154,7 +228,6 @@ class Database:
         return self.root.projects.get(project_code)
 
     def get_user_projects(self, username):
-        """Retrieve all projects associated with a user."""
         user = self.get_user(username)
         if not user:
             return []
@@ -177,12 +250,22 @@ class Database:
 
                         members_info.append({"username": member, "profile_pic": profile_pic})
 
+                overall_progress = project.calculate_overall_progress()
+                status, days_remaining = project.calculate_status_and_days_remaining()
+
                 projects.append({
                     "name": project.name,
                     "code": project.code,
-                    "members": members_info
+                    "members": members_info,
+                    "overall_progress": overall_progress,
+                    "status": status,
+                    "days_remaining": days_remaining
                 })
+
         return projects
+
+
+
 
     def add_user_to_project(self, username, project_code):
         """Add a user to a project."""

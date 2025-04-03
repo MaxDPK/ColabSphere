@@ -192,6 +192,7 @@ h1, h2, h3, .sidebar-button, .project-title, .project-details, .member-count {
     box-shadow: var(--box-shadow);
     cursor: pointer;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: space-between;
     border-left: 4px solid var(--primary-color);
@@ -316,4 +317,53 @@ h1, h2, h3, .sidebar-button, .project-title, .project-details, .member-count {
     text-align: center;
 }
 
+
+.task-list {
+    list-style-type: disc; /* Bullet points */
+    padding-left: 15px; /* Indentation */
+    font-size: 12px;
+    margin-top: 5px;
+}
+
+.task-item {
+    color: #333; /* Dark text */
+    font-size: 12px;
+}
+
+
+.progress-bar {
+    flex: 1;
+    height: 10px;
+    background-color: #ddd;
+    border-radius: 6px;
+    margin-right: 10px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background-color: #4caf50;
+    transition: width 0.3s ease-in-out;
+}
+
+.progress-text {
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: #333;
+    width: 50px;
+}
+
+.project-meta {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #444;
+}
+
+.project-status {
+    font-weight: bold;
+}
+
+.project-days-left {
+    color: #888;
+}
 

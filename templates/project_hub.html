@@ -548,10 +548,14 @@
             for task in sorted_tasks:
                 task_item = document.createElement("li")
                 task_item.style.backgroundColor = task.get("color", "#888")
+                task_item.dataset.taskId = task["id"]
+                task_item.setAttribute("data-date", task["date"])
                 task_item.style.cursor = "pointer"
-                task_item.dataset.taskId = task["id"]  # ✅ Make task removable by ID
-                task_item.setAttribute("data-date", task["date"])  # ✅ Standard HTML attribute
-            
+
+                is_gantt_task = task["id"].startswith("gantt-")
+                if is_gantt_task:
+                    task_item.classList.add("gantt-task")
+
                 if task.get("is_all_day"):
                     task_item.classList.add("all-day-task")
                     task_item.textContent = task["description"]
@@ -563,16 +567,34 @@
                     desc_span.textContent = task["description"]
                     task_item.appendChild(time_span)
                     task_item.appendChild(desc_span)
-            
-                # ✅ Prevent calendar from closing when clicking task
-                def handle_task_click(event, t=task):
-                    event.stopPropagation()
-                    open_edit_task_modal(t)
-            
-                task_item._edit_task_proxy = create_proxy(handle_task_click)
-                task_item.addEventListener("click", task_item._edit_task_proxy)
-            
+
+                # 🧠 Gantt task: show avatars and no edit modal
+                if is_gantt_task:
+                    assigned_users = task.get("assigned_to", [])
+                    avatar_container = document.createElement("div")
+                    avatar_container.classList.add("avatar-container")
+
+                    for user in assigned_users:
+                        img = document.createElement("img")
+                        img.setAttribute("src", user.get("profile_pic", "/static/profile_pics/default.png"))
+                        img.setAttribute("alt", user.get("username", ""))
+                        img.setAttribute("title", user.get("username", ""))
+                        img.classList.add("avatar")
+                        avatar_container.appendChild(img)
+
+                    task_item.appendChild(avatar_container)
+
+                else:
+                    # Only regular tasks are editable
+                    def handle_task_click(event, t=task):
+                        event.stopPropagation()
+                        open_edit_task_modal(t)
+
+                    task_item._edit_task_proxy = create_proxy(handle_task_click)
+                    task_item.addEventListener("click", task_item._edit_task_proxy)
+
                 task_list.appendChild(task_item)
+
         
 
             popup.appendChild(task_list)
@@ -1180,6 +1202,50 @@
                 asyncio.ensure_future(update_task_progress(task_name, assigned_to, final_completed_seconds))
         
                 window.alert(f"✅ Stopped working on task '{task_name}'.")
+
+                # ✅ Re-fetch and re-display Gantt task to bring back styling/modal/avatar
+                async def refresh_gantt_display():
+                    await asyncio.sleep(0.5)  # Allow backend time to update
+
+                    try:
+                        response = await pyfetch(
+                            f"/get_task_progress?project_code={project_code}&task_name={task_name}&assigned_to={','.join(assigned_to)}",
+                            method="GET",
+                            headers={"Content-Type": "application/json"},
+                        )
+
+                        if response.ok:
+                            data = await response.json()
+                            if data["success"]:
+                                completed_seconds = data["completed_seconds"]
+                                # Find the full task info from all_tasks
+                                for t in {{ all_tasks | tojson | safe }}:
+                                    if t["name"] == task_name:
+                                        task_id = f"gantt-{t['row_num']}"
+                                        task = {
+                                            "id": task_id,
+                                            "date": t["end_date"],
+                                            "description": t["name"],
+                                            "user": "system",
+                                            "color": "#fbc02d",
+                                            "label": "Deadline",
+                                            "time": None,
+                                            "is_all_day": True,
+                                            "assigned_to": t["assigned_to"],
+                                            "start_date": t.get("start_date", ""),
+                                            "predecessor": t.get("predecessor", ""),
+                                            "completed_seconds": completed_seconds,
+                                            "hours_to_complete": int(t.get("hours_to_complete", 1))
+                                        }
+                                        display_task(task)
+                                        break
+                        else:
+                            console.log("⚠️ Couldn't refresh Gantt task after stopWork.")
+                    except Exception as e:
+                        console.log(f"❌ Error refreshing Gantt task: {e}")
+
+                asyncio.ensure_future(refresh_gantt_display())
+
             else:
                 window.alert("⚠️ You're not working on this task!")
         
@@ -1450,7 +1516,8 @@
                 clicked_inside_icon = event.target.closest("#calendar-icon")
                 clicked_inside_modal = (
                     event.target.closest("#taskModal") or 
-                    event.target.closest("#editTaskModal")
+                    event.target.closest("#editTaskModal") or
+                    event.target.closest(".gantt-task-modal")
                 )
 
                 # ✅ Do nothing if clicking inside modals, calendar icon, or popup
@@ -2158,7 +2225,7 @@
 
         def display_task(task):
             global task_data_by_date
-            
+
             task_date = task["date"]
             task_list_id = f"task-list-{task_date}"
             day_cell = document.querySelector(f".calendar-day[data-date='{task_date}']")
@@ -2167,35 +2234,40 @@
                 console.log(f"❌ No matching calendar cell found for {task_date}")
                 return
 
-            # ✅ Ensure task_data_by_date dictionary exists
-            if not task_data_by_date:
-                task_data_by_date = {}
-
-            # ✅ Ensure list exists
             if task_date not in task_data_by_date:
                 task_data_by_date[task_date] = []
 
-            # ✅ Avoid duplicate task
+            # Avoid duplicate
             if not any(existing["id"] == task["id"] for existing in task_data_by_date[task_date]):
                 task_data_by_date[task_date].append(task)
 
-            # ✅ Get or create task list element
-            task_list = document.getElementById(task_list_id)
-            if not task_list:
-                task_list = document.createElement("ul")
-                task_list.id = task_list_id
-                task_list.classList.add("task-list")
-                day_cell.appendChild(task_list)
-
-            # ✅ Clear and render first 2 tasks only
+            # Build task item
+            task_list = document.getElementById(task_list_id) or document.createElement("ul")
+            task_list.id = task_list_id
+            task_list.classList.add("task-list")
+            day_cell.appendChild(task_list)
             task_list.innerHTML = ""
-            visible_tasks = task_data_by_date[task_date][:2]
+
+            # Prioritize Gantt tasks (those with assigned_to containing profile pics)
+            all_tasks = task_data_by_date[task_date]
+            gantt_tasks = [t for t in all_tasks if t["id"].startswith("gantt-")]
+            normal_tasks = [t for t in all_tasks if not t["id"].startswith("gantt-")]
+
+            # Show Gantt tasks first, and allow up to 2 tasks in total
+            visible_tasks = gantt_tasks + normal_tasks
+            visible_tasks = visible_tasks[:2]
+
             for visible_task in visible_tasks:
                 task_item = document.createElement("li")
                 task_item.style.backgroundColor = visible_task.get("color", "#888")
                 task_item.title = visible_task["description"]
                 task_item.dataset.taskId = visible_task["id"]
-                task_item.style.cursor = "pointer"  # Add pointer cursor
+                task_item.style.cursor = "pointer"
+
+                # 🎯 Check if it's a Gantt chart task
+                is_gantt_task = visible_task["id"].startswith("gantt-")
+                if is_gantt_task:
+                    task_item.classList.add("gantt-task")
 
                 if visible_task.get("is_all_day"):
                     task_item.classList.add("all-day-task")
@@ -2209,12 +2281,44 @@
                     task_item.appendChild(time_span)
                     task_item.appendChild(desc_span)
 
-                # Add click handler for editing
-                task_item._edit_task_proxy = create_proxy(lambda e, t=visible_task: open_edit_task_modal(t))
-                task_item.addEventListener("click", task_item._edit_task_proxy)
+                # 🧠 Set hover tooltip with extra info
+                if is_gantt_task:
+                    task_item.classList.add("gantt-task")
+
+                    assigned_users = visible_task.get("assigned_to", [])
+
+                    # 🔽 Create container for profile pictures
+                    avatar_container = document.createElement("div")
+                    avatar_container.classList.add("avatar-container")
+
+                    for user in assigned_users:
+                        img = document.createElement("img")
+                        img.setAttribute("src", user.get("profile_pic", "/static/profile_pics/default.png"))
+                        img.setAttribute("alt", user.get("username", ""))
+                        img.setAttribute("title", user.get("username", ""))
+                        img.classList.add("avatar")
+                        avatar_container.appendChild(img)
+
+                    task_item.appendChild(avatar_container)
+
+                    # ✅ Add Gantt modal click
+                    def handle_gantt_click(event, task=visible_task):
+                        event.stopPropagation()
+                        click_x = event.pageX
+                        click_y = event.pageY
+                        open_gantt_task_modal(task, click_x, click_y)
+                    
+
+                    task_item._gantt_click_proxy = create_proxy(handle_gantt_click)
+                    task_item.addEventListener("click", task_item._gantt_click_proxy)
+
+                else:
+                    # Only allow editing for normal tasks
+                    task_item._edit_task_proxy = create_proxy(lambda e, t=visible_task: open_edit_task_modal(t))
+                    task_item.addEventListener("click", task_item._edit_task_proxy)
+
                 task_list.appendChild(task_item)
 
-            # ✅ Add or update +X more indicator
             update_more_indicator(task_date, day_cell)
 
     
@@ -2327,6 +2431,140 @@
                 copy_project_code_btn.addEventListener("click", create_proxy(lambda e: asyncio.create_task(copy_project_code(e))))
 
 
+        def open_gantt_task_modal(task, click_x=None, click_y=None):
+            from js import document
+        
+            # Remove existing modal if any
+            existing = document.querySelector(".gantt-task-modal")
+            if existing:
+                existing.remove()
+
+            # Create a row_num -> task name map from all_tasks
+            row_to_name = {str(t["row_num"]): t["name"] for t in {{ all_tasks | tojson | safe }}}
+
+            # Get predecessor task names
+            raw_preds = task.get("predecessor", "")
+            pred_names = []
+
+            if raw_preds:
+                for row_id in raw_preds.split(";"):
+                    row_id = row_id.strip()
+                    if row_id in row_to_name:
+                        pred_names.append(row_to_name[row_id])
+
+            pretty_preds = ", ".join(pred_names) if pred_names else "None"
+
+        
+            modal = document.createElement("div")
+            modal.classList.add("gantt-task-modal")
+        
+            
+            # Set inner HTML
+            modal.innerHTML = f"""
+                <div class="gantt-modal-content">
+                    <span class="close-modal" id="close-gantt-modal">&times;</span>
+                    <h3>{task['description']}</h3>
+                    <p><strong>Start:</strong> {task.get("start_date", "N/A")}</p>
+                    <p><strong>End:</strong> {task.get("date", "N/A")}</p>
+                    <p><strong>Predecessor:</strong> {pretty_preds}</p>
+                    <p><strong>Assigned to:</strong></p>
+                    <div class="gantt-user-avatars"></div>
+        
+                    <div class="progress-container">
+                        <div class="progress-bar" id="gantt-progress-bar"></div>
+                        <span class="progress-text" id="gantt-progress-text">0%</span>
+                    </div>
+                </div>
+            """
+        
+            # Append modal to body first
+            document.body.appendChild(modal)
+        
+            # Wait a tiny bit for DOM to update before accessing its children
+            def render_progress_bar():
+                progress_bar = modal.querySelector("#gantt-progress-bar")
+                progress_text = modal.querySelector("#gantt-progress-text")
+        
+                try:
+                    completed_seconds = int(task.get("completed_seconds", 0))
+                    hours_to_complete = max(1, int(task.get("hours_to_complete", 1)))
+                    percent = min(100, (completed_seconds / (hours_to_complete * 3600)) * 100)
+                    percent_rounded = round(percent, 1)
+                except Exception as e:
+                    console.log(f"⚠️ Error calculating Gantt task progress: {e}")
+                    percent = 0
+                    percent_rounded = 0
+        
+                if progress_bar:
+                    progress_bar.style.width = f"{percent}%"
+                if progress_text:
+                    progress_text.textContent = f"{percent_rounded}%"
+        
+            # Delay a few milliseconds to ensure innerHTML is rendered
+            setTimeout(create_proxy(render_progress_bar), 10)
+        
+            # Show avatars
+            avatar_section = modal.querySelector(".gantt-user-avatars")
+            for user in task.get("assigned_to", []):
+                img = document.createElement("img")
+                img.setAttribute("src", user.get("profile_pic", "/static/profile_pics/default.png"))
+                img.setAttribute("title", user.get("username", ""))
+                img.classList.add("avatar")
+                avatar_section.appendChild(img)
+        
+            # Close button
+            close_btn = modal.querySelector("#close-gantt-modal")
+            close_btn.addEventListener("click", create_proxy(lambda e: modal.remove()))
+
+            close_btn.style.position = "absolute"
+            close_btn.style.top = "8px"
+            close_btn.style.right = "12px"
+            close_btn.style.fontSize = "18px"
+            close_btn.style.cursor = "pointer"
+            close_btn.style.color = "#888"
+            close_btn.style.fontWeight = "bold"
+
+            # Optional: Add hover effect
+            close_btn.addEventListener("mouseenter", create_proxy(lambda e: setattr(close_btn.style, "color", "#e53935")))
+            close_btn.addEventListener("mouseleave", create_proxy(lambda e: setattr(close_btn.style, "color", "#888")))
+
+        
+          
+            # Style the modal
+            modal.style.position = "absolute"
+            modal.style.backgroundColor = "white"
+            modal.style.padding = "16px"
+            modal.style.border = "1px solid #ccc"
+            modal.style.zIndex = "10000"
+            modal.style.borderRadius = "12px"
+            modal.style.width = "350px"  # ✅ Smaller width
+            modal.style.boxShadow = "0 6px 16px rgba(0,0,0,0.2)"
+            modal.style.fontSize = "14px"
+
+
+            # ✅ Fallback to center if no click position given
+            if click_x is None:
+                click_x = window.innerWidth / 2
+            if click_y is None:
+                click_y = window.innerHeight / 2
+
+            # ✅ Make sure it doesn’t go off screen
+            max_x = window.innerWidth - 360
+            max_y = window.innerHeight - 250
+
+            modal.style.left = f"{min(click_x, max_x)}px"
+            modal.style.top = f"{min(click_y, max_y)}px"
+
+            def handle_gantt_modal_outside_click(event):
+                modal = document.querySelector(".gantt-task-modal")
+                if modal and not modal.contains(event.target):
+                    modal.remove()
+
+            # Register once globally after modal logic is available
+            document._gantt_outside_proxy = create_proxy(handle_gantt_modal_outside_click)
+            document.addEventListener("click", document._gantt_outside_proxy)
+
+
 
             
 
@@ -2422,6 +2660,7 @@
 
 
                 
+
 
 
     </py-script>
