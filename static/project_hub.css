@@ -1606,4 +1606,36 @@ h2:contains("Team Members") {
     max-height: 400px;
     overflow-y: auto;
   }
+
+
+
+  .todays-task-heading {
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    color: #354D2F;
+    margin-top: 13px;
+    margin-bottom: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    border-bottom: 2px solid #b9c8d4;
+    padding-bottom: 4px;
+  }
+  
+  /* Cleaner task list */
+  .task-list-ui {
+    list-style: none;
+    padding-left: 10px;
+    margin: 0;
+  }
+  
+  .task-list-ui li {
+    margin-bottom: 10px;
+    font-family: Arial, sans-serif;
+  }
+  
+  .task-desc {
+    font-weight: bold;
+    font-size: 14px;
+    color: #222;
+  }
   
