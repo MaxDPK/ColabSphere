@@ -11,25 +11,19 @@ import base64
 import json
 from pydantic import BaseModel
 import transaction
-import uuid
-import datetime
-from pathlib import Path
+
 
 app = FastAPI()
 
-# Create uploads directory if it doesn't exist
-UPLOAD_DIR = Path("static/uploads")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # Templates and static files setup
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+
 # Track online users and WebSocket connections per project
 online_users: Dict[str, set] = {}
 project_connections: Dict[str, List[WebSocket]] = {}
-task_connections: Dict[str, List[WebSocket]] = {}
-recent_projects_store = {}
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
@@ -70,31 +64,29 @@ async def signup_page(request: Request):
 
 @app.post("/signup")
 async def signup(request: Request, username: str = Form(...), password: str = Form(...), confirm_password: str = Form(...)):
+    # Check if password and confirm password match
     if password != confirm_password:
         return templates.TemplateResponse("signup.html", {
             "request": request,
-            "error_message": "Passwords do not match. Please try again.",
-            "username": username  # Preserve the username input
+            "signup": True,
+            "error_message": "Passwords do not match. Please try again."
         })
-
+    
+    # Check if the user already exists
     if db.get_user(username):
         return templates.TemplateResponse("signup.html", {
             "request": request,
-            "error_message": "Username already exists. Please choose a different username.",
-            "username": username  # Preserve the username input
+            "signup": True,
+            "error_message": "User already exists. Please try a different username."
         })
-
+    
+    # Proceed with adding the user if passwords match and username is available
     if db.add_user(username, password):
-        return RedirectResponse(f"/choose_profile_pic?user={username}", status_code=303)
-
-    return templates.TemplateResponse("signup.html", {
-        "request": request,
-        "error_message": "An unexpected error occurred. Please try again.",
-        "username": username  # Preserve the username input
-    })
-
-
-
+        response = RedirectResponse(f"/choose_profile_pic?user={username}", status_code=303)
+        response.set_cookie(key="user", value=username)  # ✅ Set user cookie after signup
+        return response
+    
+    return "An unexpected error occurred."
 
 
 
@@ -114,7 +106,7 @@ async def upload_profile_pic(user: str = Form(...), file: UploadFile = File(...)
     profile_pic_data = await file.read()  # Read file as binary
     db.update_user_profile_pic(user, profile_pic_data)
 
-    return RedirectResponse("/login", status_code=303)
+    return RedirectResponse(f"/menu?user={user}", status_code=303)
 
 @app.post("/keep_default_profile_pic")
 async def keep_default_profile_pic(user: str = Form(...)):
@@ -128,7 +120,7 @@ async def keep_default_profile_pic(user: str = Form(...)):
     # Set the profile picture to default (empty or predefined binary default)
     db.update_user_profile_pic(user, None)
 
-    return RedirectResponse("/login", status_code=303)
+    return RedirectResponse(f"/menu?user={user}", status_code=303)
 
 @app.get("/menu", response_class=HTMLResponse)
 async def menu(request: Request, user: str):
@@ -137,9 +129,8 @@ async def menu(request: Request, user: str):
         return RedirectResponse("/login", status_code=303)
 
     projects = db.get_user_projects(user_data.username)
-    
     profile_pic = "/static/profile_pics/default.png"  # Default image
-    
+
     if user_data.profile_pic_data:
         try:
             # Convert binary image data to Base64
@@ -158,14 +149,9 @@ async def menu(request: Request, user: str):
         except Exception as e:
             print("Error converting profile picture:", e)
 
-
-    recent_projects = recent_projects_store.get(user, [])[:3]
-     # ✅ Fix: Set `project` as an empty dictionary if no projects exist
-    project = projects[0] if projects else {"code": ""}
-
     return templates.TemplateResponse(
         "menu.html",
-        {"request": request, "projects": projects, "user": user, "profile_pic": profile_pic, "recent_projects": recent_projects, "project": project}
+        {"request": request, "projects": projects, "user": user, "profile_pic": profile_pic}
     )
 
 
@@ -186,45 +172,16 @@ async def create_project(request: Request, project_name: str = Form(...)):
 
 
 
-
-
-@app.post("/join_project", response_class=HTMLResponse)
+@app.post("/join_project")
 async def join_project(request: Request, project_code: str = Form(...)):
     user = request.cookies.get("user")
     if not user:
         return RedirectResponse("/login", status_code=303)
-
     success = db.add_user_to_project(user, project_code)
     if success:
         return RedirectResponse(f"/menu?user={user}", status_code=303)
-
-    # Failed case (already a member or invalid code)
-    user_data = db.get_user(user)
-    projects = db.get_user_projects(user_data.username)
-    profile_pic = "/static/profile_pics/default.png"
-    
-    if user_data.profile_pic_data:
-        try:
-            import base64
-            encoded_image = base64.b64encode(user_data.profile_pic_data).decode('utf-8')
-            image_header = "image/png"
-            if user_data.profile_pic_data[:2] == b'\xff\xd8':
-                image_header = "image/jpeg"
-            profile_pic = f"data:{image_header};base64,{encoded_image}"
-        except Exception as e:
-            print("Error converting profile picture:", e)
-
-    recent_projects = recent_projects_store.get(user, [])[:3]
-    return templates.TemplateResponse("menu.html", {
-        "request": request,
-        "projects": projects,
-        "user": user,
-        "profile_pic": profile_pic,
-        "recent_projects": recent_projects,
-        "error": "Invalid project code or you are already a member.",
-        "show_join_modal": True
-    })
-
+    else:
+        return "Invalid project code or already a member"
 
 @app.get("/project_hub/{project_code}", response_class=HTMLResponse)
 async def project_hub(request: Request, project_code: str, user: str):
@@ -236,64 +193,18 @@ async def project_hub(request: Request, project_code: str, user: str):
     if user not in project.members:
         return "You are not a member of this project"
     
-    if not getattr(project, "gantt_chart", []):
-        print("⚠️ Warning: project.gantt_chart is empty. Reload from disk if needed.")
-
-
-    all_tasks = [
-        {
-            **task, 
-            "completed_seconds": int(task.get("completed_seconds", 0)),  
-            "hours_to_complete": int(task.get("hours_to_complete", 1))
-        }
-        for task in getattr(project, "gantt_chart", [])
-    ]
-
-    assigned_tasks = [
-        task for task in all_tasks if isinstance(task.get("assigned_to"), list) and user in task["assigned_to"]
-    ]
-
-    total_done = sum(task["completed_seconds"] for task in all_tasks)
-    total_required = sum(task["hours_to_complete"] * 3600 for task in all_tasks)
-    overall_progress = round((total_done / total_required) * 100, 1) if total_required > 0 else 0
-    
     if not any(chat.chat_id == "general1" for chat in project.chats):
         project.create_general_chat()
 
-
-    # ✅ Update the recent projects list for the user
-    if user not in recent_projects_store:
-        recent_projects_store[user] = []
-    
-    # Remove existing entry if project is already in the list
-    recent_projects_store[user] = [p for p in recent_projects_store[user] if p["code"] != project_code]
-
-    # Add the project to the top of the recent list
-    recent_projects_store[user].insert(0, {"name": project.name, "code": project.code})
-
-    # Keep only the last 3 projects
-    recent_projects_store[user] = recent_projects_store[user][:3]
     
     return templates.TemplateResponse("project_hub.html", {
         "request": request,
         "project": project,
         "members": project.members,
-        "user": user,
-        "assigned_tasks": assigned_tasks,
-        "all_tasks": all_tasks,
-        "overall_progress": overall_progress
+        "user": user
     })
 
-@app.get("/get_recent_projects")
-async def get_recent_projects(user: str):
-    """Returns the user's recent projects dynamically."""
-    recent_projects = recent_projects_store.get(user, [])[:3]
-    return JSONResponse(content={"recent_projects": recent_projects})
 
-
-
-
-active_users_per_task: Dict[str, int] = {}  # Track active workers per task
 
 @app.websocket("/ws/{project_code}")
 async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str = Query(...)):
@@ -307,40 +218,16 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
 
     # ✅ Add WebSocket & user
     project_connections[project_code].append(websocket)
-    
     online_users[project_code].add(user)
 
+    print(f"🟢 {user} is now ONLINE in project {project_code}")
+
+    # ✅ Notify all clients about updated online users
     await notify_project_users(project_code)
 
     try:
         while True:
-            data = await websocket.receive_json()
-            
-            action = data.get("action")
-            task_name = data.get("task_name")
-            assigned_to = data.get("assigned_to")
-
-            task_key = f"{task_name}-{','.join(assigned_to)}"
-
-            if action == "start_work":
-                # ✅ Increase active worker count per task
-                active_users_per_task[task_key] = active_users_per_task.get(task_key, 0) + 1
-                print(f"🟢 {active_users_per_task[task_key]} users working on {task_name}")
-
-                # ✅ Broadcast the active worker count
-                await broadcast_active_users(project_code, task_name, assigned_to)
-
-            elif action == "stop_work":
-                if task_key in active_users_per_task:
-                    active_users_per_task[task_key] -= 1
-                    if active_users_per_task[task_key] <= 0:
-                        del active_users_per_task[task_key]
-                
-                print(f"🔴 {active_users_per_task.get(task_key, 0)} users working on {task_name}")
-
-                # ✅ Broadcast updated worker count
-                await broadcast_active_users(project_code, task_name, assigned_to)
-                
+            await websocket.receive_text()  # Keep connection open
     except WebSocketDisconnect:
         print(f"🔴 {user} went OFFLINE in project {project_code}")
 
@@ -361,40 +248,6 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
         # ✅ Notify remaining clients about updated online users
         await notify_project_users(project_code)
 
-async def broadcast_active_users(project_code: str, task_name: str, assigned_to: list):
-    """Send active worker count update to all WebSocket clients"""
-    task_key = f"{task_name}-{','.join(assigned_to)}"
-    active_workers = active_users_per_task.get(task_key, 0)
-
-    update_message = {
-        "action": "update_active_users",
-        "task_name": task_name,
-        "assigned_to": assigned_to,
-        "active_workers": active_workers
-    }
-
-    if project_code in project_connections:
-        for connection in project_connections[project_code]:
-            await connection.send_json(update_message)
-
-
-
-@app.websocket("/ws/tasks/{project_code}")
-async def websocket_task_endpoint(websocket: WebSocket, project_code: str):
-    """Handles WebSocket connections for real-time task updates."""
-    await websocket.accept()
-
-    if project_code not in task_connections:
-        task_connections[project_code] = []
-    task_connections[project_code].append(websocket)
-
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        task_connections[project_code].remove(websocket)
-        if not task_connections[project_code]:
-            del task_connections[project_code]
 
 
 async def notify_project_users(project_code: str):
@@ -436,6 +289,23 @@ async def gantt_chart(request: Request, project_code: str, user: str):
         return "Invalid project"
     if user not in project.members:
         return "You are not a member of this project"
+    return templates.TemplateResponse("gantt_chart.html", {
+        "request": request,
+        "project_code": project_code,
+        "user": user,
+        "members": project.members,  # Pass the list of team members
+        "activities": getattr(project, "gantt_chart", [])  # Safeguard if gantt_chart doesn't exist yet
+    })
+
+
+
+@app.get("/gantt_chart", response_class=HTMLResponse)
+async def gantt_chart(request: Request, project_code: str, user: str):
+    project = db.get_project(project_code)
+    if not project:
+        return "Invalid project"
+    if user not in project.members:
+        return "You are not a member of this project"
     
     activities = getattr(project, "gantt_chart", [])  # Retrieve Gantt chart activities
     return templates.TemplateResponse("gantt_chart.html", {
@@ -450,250 +320,25 @@ async def gantt_chart(request: Request, project_code: str, user: str):
 async def get_activities(project_code: str):
     project = db.get_project(project_code)
     if not project:
-        return {"activities": []}
-
-    activities = getattr(project, "gantt_chart", [])
-
-    for activity in activities:
-        # ✅ Make sure `assigned_to` stays a list!
-        if isinstance(activity.get("assigned_to"), str):
-            activity["assigned_to"] = [u.strip() for u in activity["assigned_to"].split(";") if u.strip()]
-
-        # ✅ Ensure `completed_seconds` is always present
-        if "work_hours_per_day" in activity and "days" in activity:
-            if "completed_seconds" not in activity:
-                activity["completed_seconds"] = 0  # Default to 0
-
-    return {"activities": activities}
-
-
-
+        return {"activities": []}  # Return an empty list if the project is invalid
+    return {"activities": getattr(project, "gantt_chart", [])}
 
 
 
 
 @app.post("/save_gantt_chart")
 async def save_gantt_chart(data: dict = Body(...)):
+    print(data)
     project_code = data.get("project_code")
     activities = data.get("activities", [])
 
-    # Make sure project exists
-    project = db.get_project(project_code)
-    if not project:
-        return JSONResponse(content={"error": "Project not found"}, status_code=404)
-
-    for activity in activities:
-        if isinstance(activity.get("assigned_to"), str):
-            assigned_users = activity["assigned_to"].strip()
-            activity["assigned_to"] = assigned_users.split(";") if assigned_users else []
-
-        if "work_hours_per_day" in activity and "days" in activity:
-            if "completed_seconds" not in activity:
-                activity["completed_seconds"] = 0
-
+    # Call the database method to save the Gantt chart
     success, message = db.save_gantt_chart(project_code, activities)
 
-    if success:
-        # Notify Gantt clients
-        if project_code in project_connections:
-            for connection in project_connections[project_code]:
-                await connection.send_json({
-                    "action": "gantt_chart_update",
-                    "activities": activities
-                })
+    if not success:
+        return {"message": message}  # Return error message if saving failed
 
-        # Push deadlines to calendar
-        if not hasattr(project, "tasks"):
-            project.tasks = {}
-
-        for activity in activities:
-            if "end_date" in activity:
-                assigned_users = []
-                for username in activity.get("assigned_to", []):
-                    user = db.get_user(username)
-                    if user:
-                        if user.profile_pic_data:
-                            encoded = base64.b64encode(user.profile_pic_data).decode()
-                            mime_type = "image/png" if user.profile_pic_data[:2] != b'\xff\xd8' else "image/jpeg"
-                            profile_pic = f"data:{mime_type};base64,{encoded}"
-                        else:
-                            profile_pic = "/static/profile_pics/default.png"
-
-                        assigned_users.append({
-                            "username": user.username,
-                            "profile_pic": profile_pic
-                        })
-
-                calendar_task = {
-                    "id": f"gantt-{activity['row_num']}",
-                    "date": activity["end_date"],
-                    "description": activity["name"],
-                    "user": "system",
-                    "color": "#fbc02d",
-                    "label": "Deadline",
-                    "time": None,
-                    "is_all_day": True,
-                    "assigned_to": assigned_users,
-                    "start_date": activity.get("start_date", ""),
-                    "predecessor": activity.get("predecessor", ""),
-                    "completed_seconds": activity.get("completed_seconds", 0),
-                    "hours_to_complete": int(activity.get("hours_to_complete", 1))
-                }
-
-
-
-                if activity["end_date"] not in project.tasks:
-                    project.tasks[activity["end_date"]] = []
-
-                project.tasks[activity["end_date"]] = [
-                    t for t in project.tasks[activity["end_date"]]
-                    if not t["id"].startswith("gantt-") or t["id"] != calendar_task["id"]
-                ]
-
-                project.tasks[activity["end_date"]].append(calendar_task)
-
-                # Notify calendar clients
-                if project_code in task_connections:
-                    for connection in task_connections[project_code]:
-                        await connection.send_json({
-                            "action": "task_update",
-                            "task": calendar_task
-                        })
-
-        project._p_changed = True
-        transaction.commit()
-
-    return {"message": message}
-
-
-@app.post("/update_task_progress")
-async def update_task_progress(data: dict = Body(...)):
-    import base64
-
-    project_code = data.get("project_code")
-    task_name = data.get("task_name")
-    assigned_to = data.get("assigned_to")
-    completed_seconds = int(data.get("completed_seconds", 0))
-
-    print(f"🔹 Received update request: project_code={project_code}, task_name={task_name}, assigned_to={assigned_to}, completed_seconds={completed_seconds}")
-
-    if not project_code:
-        return {"success": False, "message": "Missing project_code"}
-
-    project = db.get_project(project_code)
-    if not project:
-        return {"success": False, "message": "Invalid project"}
-
-    updated = False
-    for task in project.gantt_chart:
-        if task.get("name") == task_name and sorted(task.get("assigned_to", [])) == sorted(assigned_to):
-            prev_seconds = task.get("completed_seconds", 0)
-
-            if completed_seconds > prev_seconds:
-                task["completed_seconds"] = completed_seconds
-                updated = True
-                print(f"✅ Task match found: Updating completed_time from {prev_seconds}s to {completed_seconds}s")
-
-    if updated and completed_seconds > prev_seconds:
-        success, message = db.save_gantt_chart(project_code, project.gantt_chart)
-
-        # ✅ Send to Gantt viewers (progress bar UI)
-        if success and project_code in project_connections:
-            update_message = {
-                "action": "update_progress",
-                "task_name": task_name,
-                "assigned_to": assigned_to,
-                "completed_seconds": completed_seconds,
-                "formatted_time": f"{completed_seconds // 3600}h {(completed_seconds % 3600) // 60}m {completed_seconds % 60}s"
-            }
-            print(f"📡 Sending WebSocket update to Gantt view: {update_message}")
-
-            for connection in project_connections[project_code]:
-                await connection.send_json(update_message)
-
-        # ✅ Also update the Gantt calendar task
-        if not hasattr(project, "tasks"):
-            project.tasks = {}
-
-        for task in project.gantt_chart:
-            if task.get("name") == task_name and sorted(task.get("assigned_to", [])) == sorted(assigned_to):
-                end_date = task.get("end_date")
-                if not end_date:
-                    continue
-
-                # Prepare profile picture data
-                assigned_users_with_pic = []
-                for username in assigned_to:
-                    user = db.get_user(username)
-                    if user:
-                        if user.profile_pic_data:
-                            encoded = base64.b64encode(user.profile_pic_data).decode()
-                            mime_type = "image/png" if user.profile_pic_data[:2] != b'\xff\xd8' else "image/jpeg"
-                            profile_pic = f"data:{mime_type};base64,{encoded}"
-                        else:
-                            profile_pic = "/static/profile_pics/default.png"
-
-                        assigned_users_with_pic.append({
-                            "username": user.username,
-                            "profile_pic": profile_pic
-                        })
-
-                calendar_task = {
-                    "id": f"gantt-{task['row_num']}",
-                    "date": end_date,
-                    "description": task["name"],
-                    "user": "system",
-                    "color": "#fbc02d",
-                    "label": "Deadline",
-                    "time": None,
-                    "is_all_day": True,
-                    "assigned_to": assigned_users_with_pic,
-                    "start_date": task.get("start_date", ""),
-                    "predecessor": task.get("predecessor", ""),
-                    "completed_seconds": completed_seconds,
-                    "hours_to_complete": int(task.get("hours_to_complete", 1))
-                }
-
-                # Replace existing Gantt calendar task
-                project.tasks[end_date] = [
-                    t for t in project.tasks.get(end_date, [])
-                    if not t["id"].startswith("gantt-") or t["id"] != calendar_task["id"]
-                ]
-                project.tasks[end_date].append(calendar_task)
-
-                # ✅ Send update to calendar
-                if project_code in task_connections:
-                    for connection in task_connections[project_code]:
-                        await connection.send_json({
-                            "action": "task_update",
-                            "task": calendar_task
-                        })
-
-        project._p_changed = True
-        transaction.commit()
-
-        return {"success": success, "message": message}
-
-    print("❌ Task not found in the database!")
-    return {"success": False, "message": "Task not found"}
-
-
-@app.get("/get_task_progress")
-async def get_task_progress(project_code: str, task_name: str, assigned_to: str):
-    project = db.get_project(project_code)
-    if not project:
-        return {"success": False, "message": "Invalid project"}
-
-    assigned_users = assigned_to.split(",")
-
-    for task in project.gantt_chart:
-        if task.get("name") == task_name and sorted(task.get("assigned_to", [])) == sorted(assigned_users):
-            return {"success": True, "completed_seconds": task.get("completed_seconds", 0)}
-
-    return {"success": False, "message": "Task not found"}
-
-
-
+    return {"message": message}  # Return success message
 
 
 
@@ -976,259 +621,25 @@ async def update_chat_members(data: dict = Body(...)):
     return {"message": "Chat members updated successfully"}
 
 
+# Track all WebRTC users globally (or scope this to projects later if you want)
+webrtc_connections: List[tuple[WebSocket, str]] = []
 
+@app.websocket("/ws")
+async def webrtc_websocket(websocket: WebSocket, username: str = Query(...)):
+    await websocket.accept()
+    webrtc_connections.append((websocket, username))
+    print(f"📹 {username} joined WebRTC session")
 
-@app.post("/add_task")
-async def add_task(
-    request: Request,
-    project_code: str = Body(...),
-    date: str = Body(...),
-    task: str = Body(...),
-    user: str = Body(...),
-    color: str = Body("#888"),
-    label: str = Body("General"),
-    time: str = Body(None),
-    is_all_day: bool = Body(False)
-):
-    """Add a task and notify connected WebSocket clients."""
-    project = db.get_project(project_code)
-    if not project:
-        return JSONResponse(content={"error": "Project not found"}, status_code=404)
-
-    task_entry = {
-        "id": str(uuid.uuid4()),
-        "date": date,
-        "description": task,
-        "user": user,
-        "color": color,
-        "label": label,
-        "time": time,
-        "is_all_day": is_all_day
-    }
-
-    if not hasattr(project, "tasks"):
-        project.tasks = {}
-
-    if date not in project.tasks:
-        project.tasks[date] = []
-
-    # Sort tasks by time
-    project.tasks[date].append(task_entry)
-    if not is_all_day:
-        project.tasks[date].sort(key=lambda x: (
-            x.get("is_all_day", False),  # All-day tasks first
-            x.get("time", "23:59pm")     # Then sort by time
-        ))
-
-    project._p_changed = True
-    transaction.commit()
-
-    # Notify all connected clients about the new task
-    if project_code in task_connections:
-        for connection in task_connections[project_code]:
-            try:
-                await connection.send_json({
-                    "action": "new_task",
-                    "task": task_entry
-                })
-            except Exception as e:
-                print(f"WebSocket error: {e}")
-                task_connections[project_code].remove(connection)
-
-    return JSONResponse(content={"message": "Task added successfully", "task": task_entry})
-
-@app.post("/update_task")
-async def update_task(
-    request: Request,
-    project_code: str = Body(...),
-    task_id: str = Body(...),
-    date: str = Body(...),
-    task: str = Body(...),
-    color: str = Body("#888"),
-    label: str = Body("General"),
-    time: str = Body(None),
-    is_all_day: bool = Body(False),
-    is_complete: bool = Body(False)  # ✅ Add this to detect if task is marked complete
-):
-    """Update or complete an existing task and notify all team members."""
-    project = db.get_project(project_code)
-    if not project:
-        return JSONResponse(content={"error": "Project not found"}, status_code=404)
-
-    if not hasattr(project, "tasks") or date not in project.tasks:
-        return JSONResponse(content={"error": "Task not found"}, status_code=404)
-
-    # === ✅ If task is marked complete, delete it ===
-    if is_complete:
-        project.tasks[date] = [t for t in project.tasks[date] if t["id"] != task_id]
-        project._p_changed = True
-        transaction.commit()
-
-        # Broadcast task deletion
-        if project_code in task_connections:
-            for connection in task_connections[project_code]:
-                try:
-                    await connection.send_json({
-                        "action": "task_delete",
-                        "task_id": task_id
-                    })
-                except Exception as e:
-                    print(f"WebSocket error: {e}")
-                    task_connections[project_code].remove(connection)
-
-        return JSONResponse(content={"message": "Task marked complete and deleted"})
-
-    # === ✅ Else, perform regular task update ===
-    for task_entry in project.tasks[date]:
-        if task_entry["id"] == task_id:
-            task_entry.update({
-                "description": task,
-                "color": color,
-                "label": label,
-                "time": time,
-                "is_all_day": is_all_day
-            })
-
-            if not is_all_day:
-                project.tasks[date].sort(key=lambda x: (
-                    x.get("is_all_day", False),
-                    x.get("time", "23:59pm")
-                ))
-
-            project._p_changed = True
-            transaction.commit()
-
-            if project_code in task_connections:
-                for connection in task_connections[project_code]:
-                    try:
-                        await connection.send_json({
-                            "action": "task_update",
-                            "task": task_entry
-                        })
-                    except Exception as e:
-                        print(f"WebSocket error: {e}")
-                        task_connections[project_code].remove(connection)
-
-            return JSONResponse(content={"message": "Task updated successfully", "task": task_entry})
-
-    return JSONResponse(content={"error": "Task not found"}, status_code=404)
-
-
-@app.post("/delete_task")
-async def delete_task(
-    request: Request,
-    project_code: str = Body(...),
-    task_id: str = Body(...),
-    date: str = Body(...)
-):
-    """Delete a task and notify all team members."""
-    project = db.get_project(project_code)
-    if not project:
-        return JSONResponse(content={"error": "Project not found"}, status_code=404)
-
-    if not hasattr(project, "tasks") or date not in project.tasks:
-        return JSONResponse(content={"error": "Task not found"}, status_code=404)
-
-    # Find and remove the task
-    project.tasks[date] = [t for t in project.tasks[date] if t["id"] != task_id]
-    project._p_changed = True
-    transaction.commit()
-
-    # Notify all connected clients about the task deletion
-    if project_code in task_connections:
-        for connection in task_connections[project_code]:
-            try:
-                await connection.send_json({
-                    "action": "task_delete",
-                    "task_id": task_id
-                })
-            except Exception as e:
-                print(f"WebSocket error: {e}")
-                task_connections[project_code].remove(connection)
-
-    return JSONResponse(content={"message": "Task deleted successfully"})
-
-# @app.get("/get_tasks/{project_code}/{date}")
-# async def get_tasks(project_code: str, date: str):
-#     """Get all tasks for a specific date."""
-#     project = db.get_project(project_code)
-#     if not project:
-#         return JSONResponse(content={"error": "Project not found"}, status_code=404)
-
-#     tasks = project.tasks.get(date, []) if hasattr(project, "tasks") else []
-#     return JSONResponse(content={"tasks": tasks})
-
-
-@app.get("/get_tasks_for_month/{project_code}/{year}/{month}")
-async def get_tasks_for_month(project_code: str, year: int, month: int):
-    """Get all tasks for a specific month."""
-    project = db.get_project(project_code)
-    if not project or not hasattr(project, "tasks"):
-        return JSONResponse(content={"tasks": []})
-
-    tasks_in_month = []
-
-    for date_str, task_list in project.tasks.items():
-        try:
-            date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-            if date_obj.year == year and date_obj.month == month:
-                tasks_in_month.extend(task_list)
-        except Exception as e:
-            print(f"Error parsing date {date_str}: {e}")
-            continue
-
-    return JSONResponse(content={"tasks": tasks_in_month})
-
-@app.post("/upload_file")
-async def upload_file(
-    file: UploadFile = File(...),
-    chat_id: str = Form(...),
-    user: str = Form(...),
-    project_code: str = Query(...)
-):
-    """Handle file uploads for chat messages."""
     try:
-        # Validate project and user
-        project = db.get_project(project_code)
-        if not project:
-            return JSONResponse(
-                content={"success": False, "error": "Project not found"},
-                status_code=404
-            )
+        while True:
+            data = await websocket.receive_text()
+            for conn, user in webrtc_connections:
+                if conn != websocket:
+                    await conn.send_text(data)
+    except WebSocketDisconnect:
+        print(f"🔌 {username} left WebRTC session")
+        webrtc_connections[:] = [(conn, user) for conn, user in webrtc_connections if conn != websocket]
 
-        chat = project.get_chat(chat_id)
-        if not chat or user not in chat.participants:
-            return JSONResponse(
-                content={"success": False, "error": "Chat not found or unauthorized"},
-                status_code=403
-            )
-
-        # Generate unique filename while preserving extension
-        file_ext = Path(file.filename).suffix
-        unique_filename = f"{uuid.uuid4()}{file_ext}"
-        file_path = UPLOAD_DIR / unique_filename
-
-        # Save the file
-        try:
-            with file_path.open("wb") as buffer:
-                shutil.copyfileobj(file.file, buffer)
-            
-            print(f"✅ File saved successfully: {unique_filename}")
-            return JSONResponse(content={
-                "success": True,
-                "filename": unique_filename,
-                "original_name": file.filename
-            })
-        except Exception as e:
-            print(f"❌ File save error: {str(e)}")
-            return JSONResponse(
-                content={"success": False, "error": f"File save error: {str(e)}"},
-                status_code=500
-            )
-
-    except Exception as e:
-        print(f"❌ File upload error: {str(e)}")
-        return JSONResponse(
-            content={"success": False, "error": str(e)},
-            status_code=500
-        )
+        # Notify others
+        for conn, _ in webrtc_connections:
+            await conn.send_text(f'{{"type": "disconnect", "username": "{username}"}}')
