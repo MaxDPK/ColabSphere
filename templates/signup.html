@@ -17,15 +17,15 @@
         <h1>Welcome to ColabSphere!</h1>
         <p>Create an account</p>
         <form action="/signup" method="POST" id="signup-form">
-            <input type="text" placeholder="Username" name="username" id="username" required>
+            <input type="text" placeholder="Username" name="username" id="username" required value="{{ username or '' }}">
             <input type="password" placeholder="Password" name="password" id="password" required>
             <input type="password" placeholder="Confirm Password" name="confirm_password" id="confirm_password" required>
             <button type="submit">Sign up</button>
         </form>
 
-        <!-- Display error message if passwords do not match -->
+        <!-- Display error message if there is one -->
         {% if error_message %}
-            <p id="error-message" style="color: red;">{{ error_message }}</p>
+            <p id="error-message" style="color: #BA5B38; margin-top: 15px; font-size: 0.9rem;">{{ error_message }}</p>
         {% endif %}
     </div>
 

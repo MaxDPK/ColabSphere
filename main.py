@@ -71,15 +71,27 @@ async def signup_page(request: Request):
 @app.post("/signup")
 async def signup(request: Request, username: str = Form(...), password: str = Form(...), confirm_password: str = Form(...)):
     if password != confirm_password:
-        return JSONResponse(content={"error": "Passwords do not match."}, status_code=400)
+        return templates.TemplateResponse("signup.html", {
+            "request": request,
+            "error_message": "Passwords do not match. Please try again.",
+            "username": username  # Preserve the username input
+        })
 
     if db.get_user(username):
-        return JSONResponse(content={"error": "User already exists."}, status_code=400)
+        return templates.TemplateResponse("signup.html", {
+            "request": request,
+            "error_message": "Username already exists. Please choose a different username.",
+            "username": username  # Preserve the username input
+        })
 
     if db.add_user(username, password):
         return RedirectResponse(f"/choose_profile_pic?user={username}", status_code=303)
 
-    return JSONResponse(content={"error": "An unexpected error occurred."}, status_code=500)
+    return templates.TemplateResponse("signup.html", {
+        "request": request,
+        "error_message": "An unexpected error occurred. Please try again.",
+        "username": username  # Preserve the username input
+    })
 
 
 
