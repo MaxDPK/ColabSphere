@@ -61,22 +61,43 @@
             {% for project in projects %}
                 <div class="project-card" onclick="window.location.href='/project_hub/{{ project.code }}?user={{ user }}'">
                     <span class="project-title">{{ project.name }}</span>
+                    
                     <div class="member-list">
                         {% for member in project.members %}
                             <img src="{{ member.profile_pic | safe }}" alt="{{ member.username }}" class="member-pic">
                         {% endfor %}
                     </div>
+        
                     <div class="project-progress-container">
                         <div class="progress-bar">
                             <div class="progress-fill" style="width: {{ project.overall_progress }}%;"></div>
                         </div>
                         <span class="progress-text">{{ project.overall_progress }}%</span>
                     </div>
-                    
+        
+                    <!-- ✅ New: Project Status and Days Remaining -->
+                    <div class="project-meta">
+                        <span class="project-status">
+                            Status: 
+                            {% if project.status == 'Completed' %}
+                                ✅ Completed
+                            {% elif project.status == 'Overdue' %}
+                                ❌ Overdue
+                            {% else %}
+                                🔄 Ongoing
+                            {% endif %}
+                        </span><br>
+                        
+                        {% if project.days_remaining is not none %}
+                            <span class="project-days-left">
+                                {{ project.days_remaining }} day{{ 's' if project.days_remaining != 1 else '' }} remaining
+                            </span>
+                        {% endif %}
+                    </div>
                 </div>
             {% endfor %}
         </div>
-
+        
         
         <!-- Modal for Adding Tasks -->
         <div class="overlay" id="overlay"></div>
