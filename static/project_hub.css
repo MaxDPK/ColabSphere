@@ -1676,3 +1676,30 @@ h2:contains("Team Members") {
     border-radius: 50%;
 }
 
+.working-task-label {
+    position: absolute;
+    background-color: #f0f0f0;
+    color: #333;
+    padding: 6px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    top: -20px;
+    left: 60px;
+    max-width: 160px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    z-index: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.working-task-label::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: -8px;
+    transform: translateY(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: transparent #f0f0f0 transparent transparent;
+}

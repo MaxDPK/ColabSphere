@@ -30,6 +30,9 @@ online_users: Dict[str, set] = {}
 project_connections: Dict[str, List[WebSocket]] = {}
 task_connections: Dict[str, List[WebSocket]] = {}
 recent_projects_store = {}
+working_tasks: Dict[str, Dict[str, dict]] = {}  
+
+
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
@@ -295,6 +298,7 @@ async def get_recent_projects(user: str):
 
 active_users_per_task: Dict[str, int] = {}  # Track active workers per task
 
+
 @app.websocket("/ws/{project_code}")
 async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str = Query(...)):
     await websocket.accept()
@@ -303,6 +307,8 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
         project_connections[project_code] = []
     if project_code not in online_users:
         online_users[project_code] = set()
+    if project_code not in working_tasks:
+        working_tasks[project_code] = {}
 
     project_connections[project_code].append(websocket)
     online_users[project_code].add(user)
@@ -322,9 +328,14 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
                 active_users_per_task[task_key] = active_users_per_task.get(task_key, 0) + 1
                 print(f"🟢 {active_users_per_task[task_key]} users working on {task_name}")
 
+                # ✅ Track in working_tasks
+                working_tasks[project_code][user] = {
+                    "task_name": task_name,
+                    "assigned_to": assigned_to
+                }
+
                 await broadcast_active_users(project_code, task_name, assigned_to)
 
-                # ✅ Send working-on update with all online users
                 start_msg = {
                     "action": "start_work",
                     "task_name": task_name,
@@ -345,9 +356,12 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
 
                 print(f"🔴 {active_users_per_task.get(task_key, 0)} users working on {task_name}")
 
+                # ✅ Remove from working_tasks
+                if user in working_tasks[project_code]:
+                    del working_tasks[project_code][user]
+
                 await broadcast_active_users(project_code, task_name, assigned_to)
 
-                # ✅ Send stop-work update with all online users
                 stop_msg = {
                     "action": "stop_work",
                     "task_name": task_name,
@@ -370,12 +384,19 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
         if user in online_users.get(project_code, set()):
             online_users[project_code].remove(user)
 
+        # ✅ Remove user’s working state too
+        if project_code in working_tasks and user in working_tasks[project_code]:
+            del working_tasks[project_code][user]
+
         if not project_connections[project_code]:
             del project_connections[project_code]
         if not online_users[project_code]:
             del online_users[project_code]
+        if not working_tasks[project_code]:
+            del working_tasks[project_code]
 
         await notify_project_users(project_code)
+
 
 
 async def broadcast_active_users(project_code: str, task_name: str, assigned_to: list):
@@ -393,6 +414,11 @@ async def broadcast_active_users(project_code: str, task_name: str, assigned_to:
     if project_code in project_connections:
         for connection in project_connections[project_code]:
             await connection.send_json(update_message)
+
+@app.get("/get_working_tasks")
+async def get_working_tasks(project_code: str):
+    return working_tasks.get(project_code, {})
+
 
 
 

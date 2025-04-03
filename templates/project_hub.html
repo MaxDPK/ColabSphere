@@ -375,6 +375,7 @@
         import json
         from js import document, WebSocket, setTimeout, console, window, setInterval, clearInterval
         from js import document, console, window, navigator, FormData
+        import js
         from pyodide.ffi import create_proxy
         from pyodide.http import pyfetch
         import math
@@ -393,6 +394,7 @@
         ws = None  # WebSocket for project members
         ws_tasks = None  # WebSocket for real-time tasks
 
+        online_users = {}
         work_sessions = {}  # Track active work sessions
         active_users_per_task = {}
         working_on_map = {}
@@ -911,6 +913,27 @@
                 )
                 edit_all_day.addEventListener("change", edit_all_day._toggle_time_proxy)
 
+        async def fetch_working_tasks():
+            global working_on_map
+            try:
+                response = await pyfetch(f"/get_working_tasks?project_code={project_code}")
+                data = await response.json()
+
+                # ✅ Convert fetched JSON data to a real Python dict
+                if hasattr(data, "to_py"):
+                    data = data.to_py()
+
+                # ✅ Create a real Python dict from the task info
+                working_on_map = {user: task["task_name"] for user, task in data.items()}
+
+                console.log("✅ Working-on map fetched:", working_on_map)
+                update_online_members(online_users, working_on_map)
+
+            except Exception as e:
+                console.log(f"❌ Failed to fetch working tasks: {e}")
+
+
+
         async def connect_websocket():
             global ws, ws_tasks, message_proxy, task_message_proxy, close_proxy
             
@@ -934,15 +957,22 @@
 
             console.log("🔌 Task WebSocket connection established:", ws_task_url)
 
+            await fetch_working_tasks()
+
         def on_message(event):
             global working_on_map
             """Handle WebSocket messages for updates."""
             try:
                 data = json.loads(event.data)
                 console.log("WebSocket received:", data)
+                
+                
 
                 if data.get("action") == "update":
+                    global online_users
+                    online_users = data["online_users"]
                     update_online_members(data["online_users"], working_on_map)
+                    
 
                 elif data.get("action") == "update_progress":
                     task_name = data.get("task_name")
@@ -1099,55 +1129,57 @@
         async def startWork(task_name, assigned_to):
             global work_sessions
 
-            # ✅ Ensure active users are tracked
             if "active_users" not in work_sessions:
                 work_sessions["active_users"] = set()
 
-            # ✅ Prevent user from working on multiple tasks
             if username in work_sessions["active_users"]:
                 window.alert("⚠️ You are already working on another task. Stop it first!")
                 return
 
             task_element = document.querySelector(f".task-item:has([data-task-name='{task_name}'])")
 
-            # ✅ Create a lookup for tasks by name (using the already available `all_tasks` from Jinja)
-            task_lookup = {task["name"]: task for task in {{ all_tasks | tojson | safe }}}
+            all_tasks = {{ all_tasks | tojson | safe }}
+            task_lookup = {t["name"]: t for t in all_tasks}
+            row_lookup = {str(t["row_num"]): t for t in all_tasks}
 
-            # ✅ Check if this task has predecessors
+            # ✅ Recursively check if task (normal or milestone) is complete
+            def is_task_completed(task):
+                if task.get("work_hours_per_day") and task.get("days"):
+                    required = task.get("hours_to_complete", 1) * 3600
+                    completed = task.get("completed_seconds", 0)
+                    return completed >= required
+                else:
+                    preds = [p.strip() for p in task.get("predecessor", "").split(";") if p.strip()]
+                    if not preds:
+                        return False
+                    for pred_id in preds:
+                        pred_task = row_lookup.get(pred_id)
+                        if not pred_task or not is_task_completed(pred_task):
+                            return False
+                    return True
+
+            # ✅ Check predecessor completion
             predecessors_text = task_element.querySelector(".task-predecessors")
             if predecessors_text:
                 predecessor_names = predecessors_text.textContent.replace("Predecessor: ", "").split(", ")
-
                 for pred_name in predecessor_names:
                     pred_name = pred_name.strip()
+                    pred_task = task_lookup.get(pred_name)
+                    if pred_task and not is_task_completed(pred_task):
+                        task_element.style.backgroundColor = "lightcoral"
+                        window.alert(f"⚠️ Cannot start '{task_name}' because predecessor '{pred_name}' is not completed!")
+                        return
 
-                    # ✅ Ensure we check all predecessors (even unassigned ones)
-                    if pred_name in task_lookup:
-                        pred_task = task_lookup[pred_name]
-                        pred_progress = (pred_task.get("completed_seconds", 0) / (pred_task.get("hours_to_complete", 1) * 3600)) * 100
-
-                        # ✅ If any predecessor is incomplete, block work from starting
-                        if pred_progress < 100:
-                            task_element.style.backgroundColor = "lightcoral"  # ✅ Change task color to light red
-                            window.alert(f"⚠️ Cannot start '{task_name}' because predecessor '{pred_name}' is not completed!")
-                            return  # 🚫 Stop task from starting
-
-            # ✅ Fetch latest progress before starting work
             latest_progress = await fetch_latest_task_progress(project_code, task_name, assigned_to)
-
             if latest_progress is None:
                 window.alert("❌ Failed to fetch the latest task progress. Try again later.")
                 return
 
             latest_completed_seconds = latest_progress.get("completed_seconds", 0)
 
-            # ✅ Update the DOM so it's accurate if accessed later
             progress_element = document.querySelector(f"#progress-{task_name.replace(' ', '-')}")
             if progress_element:
                 progress_element.setAttribute("data-completed-seconds", str(latest_completed_seconds))
-
-
-            window.alert(f"✅ Started working on task '{task_name}' with {latest_completed_seconds}s completed.")
 
             ws.send(json.dumps({
                 "action": "start_work",
@@ -1158,27 +1190,23 @@
             }))
 
             def update_time():
-                """Increase the completed time based on active users working on the same task."""
                 num_active_workers = max(1, active_users_per_task.get(f"{task_name}-{','.join(assigned_to)}", 1))
-                work_sessions[f"{task_name}-{','.join(assigned_to)}"]["elapsed_time"] += num_active_workers
-                new_completed_seconds = work_sessions[f"{task_name}-{','.join(assigned_to)}"]["initial_completed"] + work_sessions[f"{task_name}-{','.join(assigned_to)}"]["elapsed_time"]
-
+                task_key = f"{task_name}-{','.join(assigned_to)}"
+                work_sessions[task_key]["elapsed_time"] += num_active_workers
+                new_completed_seconds = work_sessions[task_key]["initial_completed"] + work_sessions[task_key]["elapsed_time"]
                 asyncio.ensure_future(update_task_progress(task_name, assigned_to, new_completed_seconds))
 
-            # ✅ Store `task_name`, `assigned_to`, and latest completed time
-            work_sessions[f"{task_name}-{','.join(assigned_to)}"] = {
+            task_key = f"{task_name}-{','.join(assigned_to)}"
+            work_sessions[task_key] = {
                 "task_name": task_name,
                 "assigned_to": assigned_to,
                 "interval": setInterval(create_proxy(update_time), 1000),
                 "elapsed_time": 0,
-                "initial_completed": latest_completed_seconds  # ✅ Use the latest progress
+                "initial_completed": latest_completed_seconds
             }
-
-            
 
             work_sessions["active_users"].add(username)
             console.log(f"✅ Work session started for {username} on '{task_name}' with {latest_completed_seconds}s completed.")
-
 
 
                 
@@ -1213,7 +1241,6 @@
                 # ✅ Send final update to backend
                 asyncio.ensure_future(update_task_progress(task_name, assigned_to, final_completed_seconds))
         
-                window.alert(f"✅ Stopped working on task '{task_name}'.")
 
                 # ✅ Re-fetch and re-display Gantt task to bring back styling/modal/avatar
                 async def refresh_gantt_display():
@@ -1734,6 +1761,9 @@
             
         def update_online_members(online_users, working_on_map={}):
             console.log("🔄 update_online_members CALLED")
+            console.log("🧪 online_users:", online_users)
+            console.log("🧪 working_on_map:", working_on_map)
+
             # First, hide the seating area while updating to prevent flashing
             seating_area = document.getElementById("seating-area")
             seating_area.style.visibility = "hidden"
@@ -2669,6 +2699,8 @@
             close_btn.addEventListener("click", create_proxy(close_notification))
 
             console.log(f"🔔 Displayed {len(tasks)} task(s) for today.")
+
+
 
 
                 
