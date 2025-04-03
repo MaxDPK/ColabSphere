@@ -299,15 +299,12 @@ active_users_per_task: Dict[str, int] = {}  # Track active workers per task
 async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str = Query(...)):
     await websocket.accept()
 
-    # ✅ Ensure the project is in the dictionaries
     if project_code not in project_connections:
         project_connections[project_code] = []
     if project_code not in online_users:
         online_users[project_code] = set()
 
-    # ✅ Add WebSocket & user
     project_connections[project_code].append(websocket)
-    
     online_users[project_code].add(user)
 
     await notify_project_users(project_code)
@@ -315,51 +312,71 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
     try:
         while True:
             data = await websocket.receive_json()
-            
+
             action = data.get("action")
             task_name = data.get("task_name")
             assigned_to = data.get("assigned_to")
-
             task_key = f"{task_name}-{','.join(assigned_to)}"
 
             if action == "start_work":
-                # ✅ Increase active worker count per task
                 active_users_per_task[task_key] = active_users_per_task.get(task_key, 0) + 1
                 print(f"🟢 {active_users_per_task[task_key]} users working on {task_name}")
 
-                # ✅ Broadcast the active worker count
                 await broadcast_active_users(project_code, task_name, assigned_to)
+
+                # ✅ Send working-on update with all online users
+                start_msg = {
+                    "action": "start_work",
+                    "task_name": task_name,
+                    "assigned_to": assigned_to,
+                    "username": user,
+                    "working_on_task": task_name,
+                    "online_users": await get_online_user_dict(project_code)
+                }
+
+                for connection in project_connections[project_code]:
+                    await connection.send_json(start_msg)
 
             elif action == "stop_work":
                 if task_key in active_users_per_task:
                     active_users_per_task[task_key] -= 1
                     if active_users_per_task[task_key] <= 0:
                         del active_users_per_task[task_key]
-                
+
                 print(f"🔴 {active_users_per_task.get(task_key, 0)} users working on {task_name}")
 
-                # ✅ Broadcast updated worker count
                 await broadcast_active_users(project_code, task_name, assigned_to)
-                
+
+                # ✅ Send stop-work update with all online users
+                stop_msg = {
+                    "action": "stop_work",
+                    "task_name": task_name,
+                    "assigned_to": assigned_to,
+                    "username": user,
+                    "final_completed_seconds": data.get("final_completed_seconds", 0),
+                    "working_on_task": None,
+                    "online_users": await get_online_user_dict(project_code)
+                }
+
+                for connection in project_connections[project_code]:
+                    await connection.send_json(stop_msg)
+
     except WebSocketDisconnect:
         print(f"🔴 {user} went OFFLINE in project {project_code}")
 
-        # ✅ SAFELY REMOVE WebSocket if it exists
         if websocket in project_connections.get(project_code, []):
             project_connections[project_code].remove(websocket)
 
-        # ✅ SAFELY REMOVE User if they exist
         if user in online_users.get(project_code, set()):
             online_users[project_code].remove(user)
 
-        # ✅ REMOVE EMPTY PROJECT LISTS to clean memory
         if not project_connections[project_code]:
             del project_connections[project_code]
         if not online_users[project_code]:
             del online_users[project_code]
 
-        # ✅ Notify remaining clients about updated online users
         await notify_project_users(project_code)
+
 
 async def broadcast_active_users(project_code: str, task_name: str, assigned_to: list):
     """Send active worker count update to all WebSocket clients"""
@@ -426,6 +443,30 @@ async def notify_project_users(project_code: str):
                 })
             except Exception:
                 project_connections[project_code].remove(connection)
+
+
+async def get_online_user_dict(project_code: str) -> Dict[str, str]:
+    """
+    Returns a dictionary of {username: profile_pic_data_url} for online users in a project.
+    """
+    user_map = {}
+    for username in online_users.get(project_code, []):
+        user_data = db.get_user(username)
+        profile_pic = "/static/profile_pics/default.png"
+
+        if user_data and user_data.profile_pic_data:
+            try:
+                encoded_image = base64.b64encode(user_data.profile_pic_data).decode("utf-8")
+                image_header = "image/png"
+                if user_data.profile_pic_data[:2] == b'\xff\xd8':
+                    image_header = "image/jpeg"
+                profile_pic = f"data:{image_header};base64,{encoded_image}"
+            except Exception as e:
+                print(f"Error encoding profile pic for {username}: {e}")
+
+        user_map[username] = profile_pic
+
+    return user_map
 
 
 

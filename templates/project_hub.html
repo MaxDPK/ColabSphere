@@ -395,6 +395,8 @@
 
         work_sessions = {}  # Track active work sessions
         active_users_per_task = {}
+        working_on_map = {}
+
         
         # Create persistent proxies for WebSocket event listeners
         message_proxy = None
@@ -933,13 +935,14 @@
             console.log("🔌 Task WebSocket connection established:", ws_task_url)
 
         def on_message(event):
+            global working_on_map
             """Handle WebSocket messages for updates."""
             try:
                 data = json.loads(event.data)
                 console.log("WebSocket received:", data)
 
                 if data.get("action") == "update":
-                    update_online_status(data["online_users"])
+                    update_online_members(data["online_users"], working_on_map)
 
                 elif data.get("action") == "update_progress":
                     task_name = data.get("task_name")
@@ -954,6 +957,8 @@
                 elif data.get("action") == "start_work":
                     task_name = data["task_name"]
                     assigned_to = data["assigned_to"]
+                    user_who_started = data.get("username")
+                    working_task = data.get("working_on_task")
 
                     # ✅ Sync active users from WebSocket update
                     task_key = f"{task_name}-{','.join(assigned_to)}"
@@ -961,17 +966,32 @@
 
                     console.log(f"🟢 {active_users_per_task[task_key]} users working on {task_name}.")
 
+                    working_on_map[user_who_started] = working_task
+                    update_online_members(data.get("online_users", {}), working_on_map)
+
+
 
                 elif data.get("action") == "stop_work":
                     task_name = data["task_name"]
                     assigned_to = data["assigned_to"]
                     final_completed_seconds = data["final_completed_seconds"]
+                    user_who_stopped = data.get("username")
 
                     task_key = f"{task_name}-{','.join(assigned_to)}"
                     if task_key in active_users_per_task:
                         active_users_per_task[task_key] -= 1
                         if active_users_per_task[task_key] <= 0:
                             del active_users_per_task[task_key]
+
+                    
+                    if hasattr(working_on_map, "to_py"):
+                        working_on_map = working_on_map.to_py()
+
+                    console.log("Before removal:", working_on_map)
+                    if user_who_stopped in working_on_map:
+                        del working_on_map[user_who_stopped]
+                    console.log("After removal:", working_on_map)
+                    update_online_members(data.get("online_users", {}), working_on_map)
 
                     # Ensure progress is updated
                     asyncio.ensure_future(update_task_progress(task_name, assigned_to, final_completed_seconds))
@@ -986,19 +1006,7 @@
             console.log("WebSocket closed. Reconnecting...")
             setTimeout(lambda: asyncio.ensure_future(connect_websocket()), 1000)
         
-        def update_online_status(online_users):
-            """Update the DOM to reflect the online/offline status of members."""
-            members_list = document.querySelectorAll(".member")
-            for member in members_list:
-                member_username = member.getAttribute("data-username")
-                status_element = member.querySelector(".status")
-                if member_username in online_users:
-                    status_element.textContent = "Online"
-                    status_element.style.color = "green"
-                else:
-                    status_element.textContent = "Offline"
-                    status_element.style.color = "red"
-        
+   
 
         async def update_task_progress(task_name, assigned_to, completed_seconds=None):
             """Update task progress and percentage display properly."""
@@ -1145,7 +1153,8 @@
                 "action": "start_work",
                 "task_name": task_name,
                 "assigned_to": assigned_to,
-                "username": username
+                "username": username,
+                "working_on_task": task_name
             }))
 
             def update_time():
@@ -1164,6 +1173,8 @@
                 "elapsed_time": 0,
                 "initial_completed": latest_completed_seconds  # ✅ Use the latest progress
             }
+
+            
 
             work_sessions["active_users"].add(username)
             console.log(f"✅ Work session started for {username} on '{task_name}' with {latest_completed_seconds}s completed.")
@@ -1191,7 +1202,8 @@
                     "task_name": task_name,
                     "assigned_to": assigned_to,
                     "username": username,
-                    "final_completed_seconds": final_completed_seconds
+                    "final_completed_seconds": final_completed_seconds,
+                    "working_on_task": None
                 }))
         
                 # ✅ Remove user from active users
@@ -1314,7 +1326,6 @@
         for button in document.querySelectorAll(".stop-work"):
             button.addEventListener("click", create_proxy(stopWork_proxy))
 
-        asyncio.ensure_future(connect_websocket())  # Starts WebSocket
 
         def show_todays_tasks():
             global task_data_by_date
@@ -1700,11 +1711,6 @@
             """Closes the task modal."""
             document.getElementById("taskModal").style.display = "none"
 
-        def on_message(event):
-            js_data = window.JSON.parse(event.data)
-            data = dict(js_data.to_py())
-            if data["action"] == "update":
-                update_online_members(data["online_users"])
 
         def on_task_message(event):
             """Handle real-time task updates."""
@@ -1724,11 +1730,10 @@
                 remove_task_display(data["task_id"])
                 show_todays_tasks()
                 
-        def on_close(event):
-            console.log("\u274c WebSocket closed. Reconnecting...")
-            setTimeout(lambda: asyncio.ensure_future(connect_websocket()), 1000)
+     
             
-        def update_online_members(online_users):
+        def update_online_members(online_users, working_on_map={}):
+            console.log("🔄 update_online_members CALLED")
             # First, hide the seating area while updating to prevent flashing
             seating_area = document.getElementById("seating-area")
             seating_area.style.visibility = "hidden"
@@ -1763,13 +1768,11 @@
                     
                     profile_pic = document.createElement("div")
                     profile_pic.classList.add("profile-pic")
-                    # Use the profile_pic_url directly since it's already a complete data URL or default image path
                     profile_pic.style.backgroundImage = f"url({profile_pic_url})"
                     
                     status_indicator = document.createElement("div")
                     status_indicator.classList.add("status-indicator")
                     
-                    # Add name label
                     name_label = document.createElement("div")
                     name_label.classList.add("member-name")
                     name_label.textContent = member
@@ -1777,11 +1780,20 @@
                     profile_pic.appendChild(status_indicator)
                     seat.appendChild(profile_pic)
                     seat.appendChild(name_label)
+                    
+                    # ✅ Add working task label if the user is working on a task
+                    if member in working_on_map and working_on_map[member]:
+                        task_label = document.createElement("div")
+                        task_label.classList.add("working-task-label")
+                        task_label.textContent = f"Working on: {working_on_map[member]}"
+                        seat.appendChild(task_label)
+                        console.log(f"Working on: {working_on_map[member]}")
+        
                     seating_area.appendChild(seat)
             
             # Make the seating area visible again after everything is ready
             seating_area.style.visibility = "visible"
-
+        
         def select_color(event):
             global selected_color, selected_label
             
