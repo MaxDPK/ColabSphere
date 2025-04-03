@@ -1,10 +1,10 @@
 body {
     display: flex;
     margin: 0;
-    font-family: Arial, sans-serif;
+    font-family: 'Inter', 'Albert Sans', Arial, sans-serif;
 }
 h1 {
-    font-family: "Amiri Quran", serif;  /* Alternative thin serif font */
+  
     font-weight: 300;  /* Very thin */
     font-size: 48px;
     color: #3B372E;
@@ -14,14 +14,19 @@ h1 {
 
 .sidebar {
     width: 200px;
-    background: #dec5a3;
+    background: #F5F4ED;
     padding: 20px;
     height: 100vh;
+    z-index: 10; /* 🧱 keep it on top */
+    box-shadow: 1px 0 5px rgba(0, 0, 0, 0.05);
+    position: relative; /* needed for z-index to take effect */
 }
+
+
 .main-content {
     flex-grow: 1;
     padding: 20px;
-    background: #e6d6c1;
+    background: #fffef7;
 }
 h2 {
     font-size: 16px;
@@ -280,9 +285,10 @@ body.calendar-open {
 }
 
 .project-header h1 {
-    font-family: "Amiri Quran", serif;
-    font-size: 25px;
-    color: #3B372E;
+  
+    font-size: 19px;
+    font-weight: bolder;
+    color: #c96442;
     margin: 0;
 }
 
@@ -400,7 +406,7 @@ body.calendar-open {
     right: 30px;
     width: 50px;
     height: 50px;
-    background-color: #f4c542;
+    background-color: #d59d76;
     border-radius: 50%;
     text-align: center;
     line-height: 50px;
@@ -413,7 +419,7 @@ body.calendar-open {
 
 .task-section-icon:hover {
     transform: scale(1.1);
-    background-color: #f5d042;
+    background-color: #d46b48;
 }
 
 /* Calendar Icon Container */
@@ -428,13 +434,19 @@ body.calendar-open {
 .calendar-icon {
     width: 50px;
     height: 50px;
-    background-color: #f4c542;
+    background-color: #d59d76;
     border-radius: 50%;
     text-align: center;
     line-height: 50px;
     font-size: 24px;
     cursor: pointer;
 }
+
+.calendar-icon:hover {
+    transform: scale(1.1);
+    background-color: #d46b48;
+}
+
 
     /* Ensure the calendar container fits properly */
     #calendar-popup {
@@ -1525,8 +1537,8 @@ h2:contains("Team Members") {
 
 .task-notification {
     position: fixed;
-    top: 20px;
-    right: 20px;
+    bottom: 20px;         /* ⬇️ move to bottom */
+    right: 20px;          /* ➡️ stays at right */
     width: 300px;
     background-color: #fffbea;
     border: 1px solid #f0c36d;
@@ -1538,6 +1550,7 @@ h2:contains("Team Members") {
     display: none;
     animation: fadeIn 0.5s ease-out;
 }
+
 
 .task-notification .notification-header {
     display: flex;
