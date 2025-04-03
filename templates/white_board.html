@@ -1,55 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Collaborative PyScript Whiteboard</title>
 
     <!-- PyScript -->
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.11.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2024.11.1/core.js"></script>
 
+    <!-- Updated Styles -->
     <style>
+        :root {
+            --primary-color: #4a86e8;
+            --hover-color: #2b5797;
+            --toolbar-bg: #ffffff;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --button-radius: 8px;
+            --transition: all 0.2s ease;
+        }
+
         body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
             margin: 0;
             overflow: hidden;
             display: flex;
+            background-color: #f9f9f9;
         }
+
         #toolbar {
-            width: 60px;
-            background: white;
+            width: 70px;
+            background: var(--toolbar-bg);
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 10px;
-            box-shadow: 2px 0px 5px rgba(0,0,0,0.2);
+            padding: 16px 10px;
+            box-shadow: var(--shadow);
             z-index: 10;
             position: absolute;
-            left: 10px;
-            top: 20%;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-radius: 12px;
+            gap: 12px;
         }
-        button {
-            width: 40px;
-            height: 40px;
-            margin: 15%;
+
+        .tool-button {
+            width: 48px;
+            height: 48px;
             border: none;
             cursor: pointer;
-            background: lightgray;
+            background: white;
+            border-radius: var(--button-radius);
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
+
+        .tool-button:hover {
+            background: #f0f5ff;
+            transform: translateY(-2px);
+        }
+
+        .tool-button.active {
+            background: #e6efff;
+            box-shadow: inset 0 0 0 2px var(--primary-color);
+        }
+
+        #colorPicker {
+            width: 48px;
+            height: 48px;
+            border: none;
+            cursor: pointer;
+            border-radius: var(--button-radius);
+            overflow: hidden;
+            transition: var(--transition);
+            padding: 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        #colorPicker:hover {
+            transform: scale(1.05);
+        }
+
+        .divider {
+            width: 40px;
+            height: 1px;
+            background: #e0e0e0;
+            margin: 4px 0;
+        }
+
         canvas {
             flex: 1;
             background: white;
+            box-shadow: var(--shadow);
+        }
+
+        @media (max-width: 768px) {
+            #toolbar {
+                width: 100%;
+                height: 70px;
+                flex-direction: row;
+                bottom: 0;
+                top: auto;
+                left: 0;
+                transform: none;
+                border-radius: 0;
+                border-top-right-radius: 12px;
+                border-top-left-radius: 12px;
+                justify-content: center;
+            }
+        }
+
+        /* Tooltip styles */
+        .tooltip {
+            position: relative;
+        }
+
+        .tooltip:before {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 60px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #333;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .tooltip:hover:before {
+            opacity: 1;
+        }
+
+        @media (max-width: 768px) {
+            .tooltip:before {
+                top: -40px;
+                left: 50%;
+                transform: translateX(-50%);
+            }
         }
     </style>
 </head>
 <body>
     <div id="toolbar">
-        <button id="pencil">✏️</button>
-        <button id="pen">🖊️</button>
-        <button id="eraser">🧹</button>
-        <button id="highlight">🟨</button>
-        <button id="clear">🗑️</button>
-        <input type="color" id="colorPicker" value="#000000">
+        <button id="pencil" class="tool-button tooltip active" data-tooltip="Pencil">✏️</button>
+        <button id="pen" class="tool-button tooltip" data-tooltip="Pen">🖊️</button>
+        <button id="highlight" class="tool-button tooltip" data-tooltip="Highlight">🟨</button>
+        <div class="divider"></div>
+        <button id="eraser" class="tool-button tooltip" data-tooltip="Eraser">🧹</button>
+        <button id="clear" class="tool-button tooltip" data-tooltip="Clear All">🗑️</button>
+        <div class="divider"></div>
+        <input type="color" id="colorPicker" value="#000000" class="tooltip" data-tooltip="Color">
     </div>
     <canvas id="whiteboard"></canvas>
 
@@ -59,17 +168,14 @@ import asyncio
 import json
 from pyodide.ffi import create_proxy
 
-# WebSocket connection
-project_code = js.window.location.pathname.split("/").pop()  # Extract project code from URL
+project_code = js.window.location.pathname.split("/").pop()
 protocol = "wss" if js.window.location.protocol == "https:" else "ws"
 host = js.window.location.host
 ws = js.WebSocket.new(f"{protocol}://{host}/ws/whiteboard/{project_code}")
 
-# Get the whiteboard canvas and context
 canvas = js.document.getElementById("whiteboard")
 ctx = canvas.getContext("2d")
 
-# Ensure full-screen canvas
 def resize_canvas():
     canvas.width = js.window.innerWidth
     canvas.height = js.window.innerHeight
@@ -77,13 +183,12 @@ def resize_canvas():
 resize_canvas()
 js.window.addEventListener("resize", create_proxy(lambda event: resize_canvas()))
 
-# Default drawing settings
 ctx.strokeStyle = "black"
 ctx.lineWidth = 2
 ctx.globalAlpha = 1
 
 drawing = False
-tool = "pen"  # Default tool
+tool = "pen"
 color_picker = js.document.getElementById("colorPicker")
 
 def get_selected_color():
@@ -94,8 +199,6 @@ def start_draw(event):
     drawing = True
     ctx.beginPath()
     ctx.moveTo(event.offsetX, event.offsetY)
-
-    # Send a "start" event to WebSocket
     data = {
         "action": "start",
         "x": event.offsetX,
@@ -103,15 +206,11 @@ def start_draw(event):
     }
     ws.send(json.dumps(data))
 
-
-
 def draw(event):
     if not drawing:
         return
-
     ctx.lineTo(event.offsetX, event.offsetY)
     ctx.stroke()
-
     data = {
         "x": event.offsetX,
         "y": event.offsetY,
@@ -127,7 +226,7 @@ def stop_draw(event):
 
 def clear_canvas(event):
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    ws.send(json.dumps({"action": "clear"}))  # Send to all clients
+    ws.send(json.dumps({"action": "clear"}))
 
 def set_pencil(event):
     global tool
@@ -135,6 +234,7 @@ def set_pencil(event):
     ctx.strokeStyle = "black"
     ctx.lineWidth = 0.25
     ctx.globalAlpha = 1
+    set_active_button("pencil")
 
 def set_pen(event):
     global tool
@@ -142,6 +242,7 @@ def set_pen(event):
     ctx.strokeStyle = get_selected_color()
     ctx.lineWidth = 1.5
     ctx.globalAlpha = 1
+    set_active_button("pen")
 
 def set_eraser(event):
     global tool
@@ -149,6 +250,7 @@ def set_eraser(event):
     ctx.strokeStyle = "white"
     ctx.lineWidth = 10
     ctx.globalAlpha = 1
+    set_active_button("eraser")
 
 def set_highlight(event):
     global tool
@@ -156,8 +258,14 @@ def set_highlight(event):
     ctx.strokeStyle = get_selected_color()
     ctx.lineWidth = 10
     ctx.globalAlpha = 0.08
+    set_active_button("highlight")
 
-# Event listeners
+def set_active_button(active_id):
+    buttons = ["pencil", "pen", "highlight", "eraser", "clear"]
+    for btn_id in buttons:
+        js.document.getElementById(btn_id).classList.remove("active")
+    js.document.getElementById(active_id).classList.add("active")
+
 canvas.addEventListener("mousedown", create_proxy(start_draw))
 canvas.addEventListener("mousemove", create_proxy(draw))
 canvas.addEventListener("mouseup", create_proxy(stop_draw))
@@ -169,25 +277,21 @@ js.document.getElementById("eraser").addEventListener("click", create_proxy(set_
 js.document.getElementById("highlight").addEventListener("click", create_proxy(set_highlight))
 js.document.getElementById("clear").addEventListener("click", create_proxy(clear_canvas))
 
-# Handle incoming WebSocket messages
 def handle_message(event):
     data = json.loads(event.data)
-
     if "action" in data:
         if data["action"] == "clear":
             ctx.clearRect(0, 0, canvas.width, canvas.height)
         elif data["action"] == "start":
-            ctx.beginPath()  # Start a new path when receiving "start"
+            ctx.beginPath()
             ctx.moveTo(data["x"], data["y"])
-        return  # Return early to prevent drawing a line to (0,0)
+        return
 
     ctx.strokeStyle = data["color"]
-    ctx.lineWidth = data.get("lineWidth", 2.5)  
+    ctx.lineWidth = data.get("lineWidth", 2.5)
     ctx.globalAlpha = 1
     ctx.lineTo(data["x"], data["y"])
     ctx.stroke()
-        
-
 
 ws.addEventListener("message", create_proxy(handle_message))
     </script>
