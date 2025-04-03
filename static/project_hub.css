@@ -1,4 +1,3 @@
-
 body {
     display: flex;
     margin: 0;
@@ -1524,4 +1523,119 @@ h2:contains("Team Members") {
     z-index: 10000 !important;
 }
 
+.task-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 300px;
+    background-color: #fffbea;
+    border: 1px solid #f0c36d;
+    border-radius: 10px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+    padding: 15px;
+    z-index: 9999;
+    font-family: Arial, sans-serif;
+    display: none;
+    animation: fadeIn 0.5s ease-out;
+}
 
+.task-notification .notification-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.task-notification .close-notification {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.task-notification ul {
+    padding-left: 20px;
+    margin: 0;
+}
+
+.task-notification li {
+    margin-bottom: 8px;
+}
+
+.task-notification.show {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.check-reminder-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: #fbc02d;
+    color: black;
+    font-weight: bold;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    cursor: pointer;
+    z-index: 9999;
+}
+
+.check-reminder-btn:hover {
+    background-color: #f1b400;
+}
+
+.task-notification-modal {
+    position: fixed;
+    bottom: 80px;
+    right: 30px;
+    background-color: white;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    z-index: 9999;
+  }
+  
+  .task-notification-modal-content {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+
+
+  .todays-task-heading {
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    color: #354D2F;
+    margin-top: 13px;
+    margin-bottom: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    border-bottom: 2px solid #b9c8d4;
+    padding-bottom: 4px;
+  }
+  
+  /* Cleaner task list */
+  .task-list-ui {
+    list-style: none;
+    padding-left: 10px;
+    margin: 0;
+  }
+  
+  .task-list-ui li {
+    margin-bottom: 10px;
+    font-family: Arial, sans-serif;
+  }
+  
+  .task-desc {
+    font-weight: bold;
+    font-size: 14px;
+    color: #222;
+  }
+  

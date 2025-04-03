@@ -147,4 +147,10 @@ form {
 }
 .illustration img {
     max-width: 100%;
+    opacity: 1;
+    transition: opacity 0.8s ease-in-out;
+}
+
+.illustration img.fade-out {
+    opacity: 0;
 }

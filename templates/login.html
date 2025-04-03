@@ -4,12 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login</title>
+
+    <!-- Fonts -->
     <link href='https://fonts.googleapis.com/css?family=Lalezar' rel='stylesheet'>
     <link href='https://fonts.googleapis.com/css?family=Albert Sans' rel='stylesheet'>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&display=swap" rel="stylesheet">
+
+    <!-- CSS -->
     <link rel="stylesheet" href="./static/login.css">
+
+    <!-- PyScript Core -->
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
 </head>
 <body>
     <div class="container">
@@ -22,19 +29,52 @@
                 <a href="#" class="forgot-password">Forgot Password?</a>
                 <button type="submit">Login</button>
             </form>
-            
-            <!-- Display error message if exists -->
+
             {% if error_message %}
                 <p class="error-message">{{ error_message }}</p>
             {% endif %}
 
-            <p class="register"> <span class="new-here">New here?</span> <a href="/signup">Register now</a></p>
+            <p class="register">
+                <span class="new-here">New here?</span>
+                <a href="/signup">Register now</a>
+            </p>
         </div>
-        
+
         <div class="illustration">
-            <!-- Add an image or illustration here -->
-            <img src="illustration.png" alt="Illustration" class="illustration-img">
+            <img id="slideshow-img" src="/static/pic1.png" alt="Illustration" class="illustration-img">
         </div>
     </div>
+
+    <div style="display: none">
+        <py-script>
+          from js import document
+          import asyncio
+      
+          images = ["/static/pic1.png", "/static/pic2.png", "/static/pic3.png"]
+          current_index = 0
+          slideshow_img = document.getElementById("slideshow-img")
+      
+          async def slideshow():
+              global current_index
+              while True:
+                  await asyncio.sleep(3)
+      
+                  # Fade out
+                  slideshow_img.classList.add("fade-out")
+                  await asyncio.sleep(0.8)  # Wait for fade-out to finish
+      
+                  # Switch image
+                  current_index = (current_index + 1) % len(images)
+                  slideshow_img.src = images[current_index]
+      
+                  # Allow image to load before fading in
+                  await asyncio.sleep(0.1)
+                  slideshow_img.classList.remove("fade-out")
+      
+          asyncio.ensure_future(slideshow())
+        </py-script>
+    </div>
+      
+    
 </body>
 </html>

@@ -71,15 +71,27 @@ async def signup_page(request: Request):
 @app.post("/signup")
 async def signup(request: Request, username: str = Form(...), password: str = Form(...), confirm_password: str = Form(...)):
     if password != confirm_password:
-        return JSONResponse(content={"error": "Passwords do not match."}, status_code=400)
+        return templates.TemplateResponse("signup.html", {
+            "request": request,
+            "error_message": "Passwords do not match. Please try again.",
+            "username": username  # Preserve the username input
+        })
 
     if db.get_user(username):
-        return JSONResponse(content={"error": "User already exists."}, status_code=400)
+        return templates.TemplateResponse("signup.html", {
+            "request": request,
+            "error_message": "Username already exists. Please choose a different username.",
+            "username": username  # Preserve the username input
+        })
 
     if db.add_user(username, password):
         return RedirectResponse(f"/choose_profile_pic?user={username}", status_code=303)
 
-    return JSONResponse(content={"error": "An unexpected error occurred."}, status_code=500)
+    return templates.TemplateResponse("signup.html", {
+        "request": request,
+        "error_message": "An unexpected error occurred. Please try again.",
+        "username": username  # Preserve the username input
+    })
 
 
 
@@ -172,16 +184,45 @@ async def create_project(request: Request, project_name: str = Form(...)):
 
 
 
-@app.post("/join_project")
+
+
+@app.post("/join_project", response_class=HTMLResponse)
 async def join_project(request: Request, project_code: str = Form(...)):
     user = request.cookies.get("user")
     if not user:
         return RedirectResponse("/login", status_code=303)
+
     success = db.add_user_to_project(user, project_code)
     if success:
         return RedirectResponse(f"/menu?user={user}", status_code=303)
-    else:
-        return "Invalid project code or already a member"
+
+    # Failed case (already a member or invalid code)
+    user_data = db.get_user(user)
+    projects = db.get_user_projects(user_data.username)
+    profile_pic = "/static/profile_pics/default.png"
+    
+    if user_data.profile_pic_data:
+        try:
+            import base64
+            encoded_image = base64.b64encode(user_data.profile_pic_data).decode('utf-8')
+            image_header = "image/png"
+            if user_data.profile_pic_data[:2] == b'\xff\xd8':
+                image_header = "image/jpeg"
+            profile_pic = f"data:{image_header};base64,{encoded_image}"
+        except Exception as e:
+            print("Error converting profile picture:", e)
+
+    recent_projects = recent_projects_store.get(user, [])[:3]
+    return templates.TemplateResponse("menu.html", {
+        "request": request,
+        "projects": projects,
+        "user": user,
+        "profile_pic": profile_pic,
+        "recent_projects": recent_projects,
+        "error": "Invalid project code or you are already a member.",
+        "show_join_modal": True
+    })
+
 
 @app.get("/project_hub/{project_code}", response_class=HTMLResponse)
 async def project_hub(request: Request, project_code: str, user: str):

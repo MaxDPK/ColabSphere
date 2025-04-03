@@ -24,6 +24,13 @@
         <div class="channel-section" id="channel-list" style="display: none;">  
             <button class="add-channel">+ Add channel</button>
         </div> 
+        <!-- ✅ Today’s Tasks Section -->
+        <div id="todays-tasks-section">
+            <h2 class="todays-task-heading">Today’s Tasks</h2>
+
+            <ul id="todays-task-list" class="task-list-ui"></ul>
+        </div>
+  
         
         <!-- Right-Click Dropdown Menu for Chat Management -->
         <div id="chat-dropdown" class="dropdown-menu" style="display: none;">
@@ -32,6 +39,9 @@
                 <li py-click="open_manage_members_modal">Manage Members</li>
             </ul>
         </div>
+
+
+  
 
        
     </div>
@@ -347,7 +357,18 @@
         </ul>
     </div>
     
+        <!-- 🔔 Task Notification Container -->
+    <div id="task-notification" class="task-notification hidden">
+        <div class="notification-header">
+            <span>📌 Today's Tasks</span>
+            <button class="close-notification">&times;</button>
+        </div>
+        <ul id="notification-list"></ul>
+    </div>
     
+    
+  
+
 
     <py-script>
         import asyncio
@@ -358,6 +379,9 @@
         from pyodide.http import pyfetch
         import math
         import datetime
+
+        stored_notifications = []
+
     
 
         console.log("📦 Script loaded") 
@@ -1225,6 +1249,50 @@
             button.addEventListener("click", create_proxy(stopWork_proxy))
 
         asyncio.ensure_future(connect_websocket())  # Starts WebSocket
+
+        def show_todays_tasks():
+            global task_data_by_date
+
+            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            list_el = document.getElementById("todays-task-list")
+            list_el.innerHTML = ""
+
+            if today not in task_data_by_date or not task_data_by_date[today]:
+                li = document.createElement("li")
+                li.textContent = "No tasks scheduled for today."
+                li.style.color = "#888"
+                list_el.appendChild(li)
+                return
+
+            for task in task_data_by_date[today]:
+                li = document.createElement("li")
+                li.style.marginBottom = "10px"
+                li.style.fontFamily = "Arial, sans-serif"
+
+                bullet = document.createElement("span")
+                bullet.textContent = "• "
+                bullet.style.color = "#354D2F"
+                bullet.style.fontSize = "14px"
+                bullet.style.marginRight = "4px"
+
+                desc = document.createElement("span")
+                desc.textContent = task["description"]
+                desc.style.fontWeight = "bold"
+                desc.style.fontSize = "14px"
+                desc.style.color = "#222"
+
+                time = document.createElement("span")
+                time.textContent = "" if task.get("is_all_day") else f" {task.get('time', '')}"
+                time.style.fontSize = "13px"
+                time.style.color = "#666"
+                time.style.marginLeft = "4px"
+
+                li.appendChild(bullet)
+                li.appendChild(desc)
+                li.appendChild(time)
+                list_el.appendChild(li)
+
+
         
         def init_all():
             """Initialize all event handlers and components"""
@@ -1244,6 +1312,7 @@
             asyncio.ensure_future(connect_websocket())
             asyncio.ensure_future(fetch_channels())
             update_calendar()
+            show_todays_tasks()
         
         def update_calendar():
             global current_year, current_month
@@ -1578,12 +1647,15 @@
     
             if data["action"] == "new_task":
                 display_task(data["task"])
+                show_todays_tasks()
             elif data["action"] == "task_update":
                 # Handle task updates (modifications or deletions)
                 update_task_display(data["task"])
+                show_todays_tasks()
             elif data["action"] == "task_delete":
                 # Handle task deletions
                 remove_task_display(data["task_id"])
+                show_todays_tasks()
                 
         def on_close(event):
             console.log("\u274c WebSocket closed. Reconnecting...")
@@ -1710,6 +1782,8 @@
                 for task in data["tasks"]:
                     display_task(task)
                 console.log("✅ Loaded tasks for the month")
+                show_upcoming_task_notifications()
+                show_todays_tasks()
             except Exception as e:
                 console.log(f"❌ Failed to fetch tasks: {e}")
                 
@@ -2307,6 +2381,48 @@
 
         # Add this to your initialization code
         initialize_task_section()
+
+        def show_upcoming_task_notifications():
+            """Check task_data_by_date and display tasks for today in a notification."""
+            global task_data_by_date, stored_notifications
+
+            today = datetime.datetime.now()  # 👈 Add this to define `today`
+            today_str = today.strftime("%Y-%m-%d")
+
+            if today_str not in task_data_by_date or not task_data_by_date[today_str]:
+                console.log("📭 No tasks scheduled for today.")
+                return
+
+            tasks = task_data_by_date[today_str]
+            notification = document.getElementById("task-notification")
+            list_el = document.getElementById("notification-list")
+
+            list_el.innerHTML = ""
+
+            for task in tasks:
+                li = document.createElement("li")
+                time = task.get("time", "All Day") if not task.get("is_all_day", False) else "All Day"
+                li.textContent = f"{time} - {task['description']}"
+                list_el.appendChild(li)
+
+                stored_notifications.append(f"{time} - {task['description']}")
+
+            notification.classList.add("show")
+            window.setTimeout(
+                create_proxy(lambda: notification.classList.remove("show")),
+                10000
+            )
+
+            close_btn = notification.querySelector(".close-notification")
+            def close_notification(event):
+                notification.classList.remove("show")
+            close_btn.addEventListener("click", create_proxy(close_notification))
+
+            console.log(f"🔔 Displayed {len(tasks)} task(s) for today.")
+
+
+                
+
 
     </py-script>
 
