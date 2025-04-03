@@ -315,7 +315,7 @@ async def logout():
 
 
 
-WHITEBOARD_DIR = "whiteboards"
+WHITEBOARD_DIR = "database/whiteboards"
 os.makedirs(WHITEBOARD_DIR, exist_ok=True)
 
 def get_whiteboard_path(project_code: str) -> str:
