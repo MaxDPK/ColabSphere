@@ -570,9 +570,18 @@
                     create_message_element(data["user"], data["message"])
                     messages_div = document.getElementById("messages")
                     messages_div.scrollTop = messages_div.scrollHeight
+
             elif data.get("action") == "poll":
                 print("📮 Received poll:", data["poll"])
                 create_poll_element(data["poll"])
+
+            elif data.get("action") == "poll_vote":
+                updated_poll = data["poll"]
+                old = document.getElementById(f"poll-{updated_poll['task_id']}")
+                if old:
+                    old.remove()
+                create_poll_element(updated_poll)
+
 
         def create_poll_element(poll):
             console.log("🛠️ Inside create_poll_element:", poll)
@@ -605,6 +614,12 @@
             voter_list.style.borderTop = "1px solid #ccc"
             voter_list.style.paddingTop = "10px"
 
+            def make_vote_handler(vote_value):
+                async def handler(e):
+                    await vote_poll(poll, vote_value)
+                return create_proxy(handler)
+
+
             for voter in poll["participants"]:
                 # ❌ Skip rendering vote row for requester
                 if voter == poll["requested_by"]:
@@ -633,7 +648,7 @@
                     status = document.createElement("span")
                     status.textContent = "❌ Rejected"
                     status.style.color = "#f44336"
-                elif voter == username:
+                elif voter == username and vote is None:
                     # Only allow current user to vote
                     approve_btn = document.createElement("button")
                     approve_btn.textContent = "✅ Approve"
@@ -643,7 +658,7 @@
                     approve_btn.style.cursor = "pointer"
                     approve_btn.style.backgroundColor = "#4caf50"
                     approve_btn.style.color = "#fff"
-                    approve_btn.onclick = create_proxy(lambda e: vote_poll(poll, "yes"))
+                    approve_btn.onclick = make_vote_handler("yes")
 
                     reject_btn = document.createElement("button")
                     reject_btn.textContent = "❌ Reject"
@@ -653,7 +668,7 @@
                     reject_btn.style.cursor = "pointer"
                     reject_btn.style.backgroundColor = "#f44336"
                     reject_btn.style.color = "#fff"
-                    reject_btn.onclick = create_proxy(lambda e: vote_poll(poll, "no"))
+                    reject_btn.onclick = make_vote_handler("no")
 
                     vote_btns.appendChild(approve_btn)
                     vote_btns.appendChild(reject_btn)
@@ -674,6 +689,44 @@
             messages_div.scrollTop = messages_div.scrollHeight
 
 
+
+        async def vote_poll(poll, vote):
+            try:
+                response = await pyfetch(
+                    "/vote_poll",
+                    method="POST",
+                    headers={"Content-Type": "application/json"},
+                    body=json.dumps({
+                        "project_code": project_code,
+                        "task_id": poll["task_id"],
+                        "user": username,
+                        "vote": vote
+                    })
+                )
+
+                data = await response.json()
+                if "updated_poll" in data:
+                    print("✅ Vote submitted and poll updated")
+                    old = document.getElementById(f"poll-{poll['task_id']}")
+                    if old:
+                        old.remove()
+                    create_poll_element(data["updated_poll"])
+                else:
+                    print("❌ Failed to update poll:", data)
+            except Exception as e:
+                print("❌ Error voting on poll:", e)
+
+
+        async def fetch_latest_poll(task_id):
+            try:
+                response = await pyfetch(f"/get_poll?project_code={project_code}&task_id={task_id}", method="GET")
+                poll_data = await response.json()
+                if "poll" in poll_data:
+                    create_poll_element(poll_data["poll"])
+            except Exception as e:
+                console.log("❌ Failed to fetch latest poll:", e)
+
+
                 
         def create_message_element(user, message_data):
             messages_div = document.getElementById("messages")
@@ -683,11 +736,17 @@
                 try:
                     parsed = json.loads(message_data)
                     if "poll" in parsed:
-                        console.log("📥 Rendering poll message:", parsed["poll"])
-                        create_poll_element(parsed["poll"])
+                        task_id = parsed["poll"]["task_id"]
+
+                        # Instead of using parsed["poll"] blindly, fetch the latest from backend
+                        asyncio.ensure_future(fetch_latest_poll(task_id))
                         return  # ✅ Don't continue normal message rendering
-                except Exception as e:
-                    console.log("⚠️ Failed to parse system message as poll:", e)
+                except:
+                    # If not a poll, treat as plain system text
+                    message_element = document.createElement("div")
+                    message_element.classList.add("message", "received")
+                    message_element.textContent = message_data
+                    messages_div.appendChild(message_element)
 
             message_element = document.createElement("div")
             message_element.classList.add("message")
@@ -824,6 +883,8 @@
             message_element.appendChild(content)
             messages_div.appendChild(message_element)
             messages_div.scrollTop = messages_div.scrollHeight
+
+        
 
 
         def on_error(event):

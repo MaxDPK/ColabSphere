@@ -14,6 +14,10 @@ import transaction
 import uuid
 import datetime
 from pathlib import Path
+import asyncio
+from datetime import timedelta
+
+
 
 app = FastAPI()
 
@@ -549,6 +553,43 @@ async def save_gantt_chart(data: dict = Body(...)):
     project = db.get_project(project_code)
     if not project:
         return JSONResponse(content={"error": "Project not found"}, status_code=404)
+    
+    # Step 0: Remove only outdated deadline polls
+    if hasattr(project, "deadline_polls"):
+        existing_polls = dict(project.deadline_polls)
+        project.deadline_polls.clear()  # Start clean
+
+        for poll_task_id, poll in existing_polls.items():
+            for activity in activities:
+                is_same = (
+                    poll["task_name"] == activity.get("name") and
+                    poll.get("start_date") == activity.get("start_date") and
+                    poll.get("original_end_date") == activity.get("end_date")  # not new_deadline
+                )
+                if is_same:
+                    # ✅ Ensure status is carried over
+                    if "status" not in poll:
+                        poll["status"] = "ongoing"
+                    project.deadline_polls[poll_task_id] = poll
+                    break
+
+
+
+
+    # Step 0.5: Remove old poll messages from announcements
+    chat = project.get_chat("announcements")
+    if chat:
+        chat.messages = [
+            msg for msg in chat.messages
+            if not (msg["user"] == "System" and "poll" in msg["message"])
+        ]
+
+    # Step 0.6: Re-add preserved poll messages for still-valid polls
+    for poll in project.deadline_polls.values():
+        chat.add_message("System", json.dumps({"poll": poll}))
+
+
+
 
     for activity in activities:
         if isinstance(activity.get("assigned_to"), str):
@@ -1043,6 +1084,7 @@ async def update_chat_members(data: dict = Body(...)):
 
     return {"message": "Chat members updated successfully"}
 
+
 @app.post("/request_deadline_poll")
 async def request_deadline_poll(data: dict = Body(...)):
     project_code = data.get("project_code")
@@ -1050,40 +1092,39 @@ async def request_deadline_poll(data: dict = Body(...)):
     task_name = data.get("task_name")
     new_deadline = data.get("new_deadline")
     requested_by = data.get("requested_by")
+    start_date = data.get("start_date")
+    original_end_date = data.get("current_end_date")
 
     project = db.get_project(project_code)
     if not project:
         return JSONResponse(content={"error": "Project not found"}, status_code=404)
 
-    # ✅ Avoid duplicate poll for the same task
     if task_id in project.deadline_polls:
         return JSONResponse(content={"error": "A deadline extension poll already exists for this task."}, status_code=400)
 
-    # ✅ Build poll object
     poll_data = {
         "poll_type": "deadline_extension",
         "task_id": task_id,
         "task_name": task_name,
+        "start_date": start_date,
+        "original_end_date": original_end_date,
         "new_deadline": new_deadline,
         "requested_by": requested_by,
-        "votes": {requested_by: "yes"},  # Auto-approve self
+        "votes": {requested_by: "yes"},
         "participants": project.members,
         "status": "ongoing"
     }
 
-    # ✅ Save to backend
     project.deadline_polls[task_id] = poll_data
     project._p_changed = True
     transaction.commit()
 
-    # ✅ Send poll to "announcements" chat
     chat = project.get_chat("announcements")
     if not chat:
         return JSONResponse(content={"error": "Announcements chat not found"}, status_code=404)
 
     chat.add_message("System", json.dumps({"poll": poll_data}))
 
-    # ✅ Broadcast poll to WebSocket clients
     if "announcements" in project_connections:
         for connection in project_connections["announcements"]:
             await connection.send_json({
@@ -1091,14 +1132,12 @@ async def request_deadline_poll(data: dict = Body(...)):
                 "poll": poll_data
             })
 
-    # ✅ Broadcast poll update to all members via WebSocket
     for chat_id, connections in project_connections.items():
         for connection in connections:
             await connection.send_json({
                 "action": "deadline_poll_requested",
                 "task_id": task_id
             })
-
 
     return {"message": "Poll created and sent"}
 
@@ -1120,6 +1159,174 @@ async def get_requested_deadlines(project_code: str):
         }
 
     return {"requested_task_ids": requested_ids, "details": details}
+
+@app.post("/vote_poll")
+async def vote_poll_endpoint(data: dict = Body(...)):
+    project_code = data.get("project_code")
+    task_id = data.get("task_id")
+    vote = data.get("vote")
+    user = data.get("user")
+
+    project = db.get_project(project_code)
+    if not project:
+        return {"error": "Project not found"}
+
+    poll = project.deadline_polls.get(task_id)
+    if not poll:
+        return {"error": "Poll not found"}
+
+    # ✅ Register vote
+    poll["votes"][user] = vote
+    project.deadline_polls[task_id] = poll
+    project._p_changed = True
+    transaction.commit()
+
+    # ✅ Check if poll is complete
+    all_voters = [u for u in poll["participants"] if u != poll["requested_by"]]
+    votes = poll["votes"]
+
+    approved = all(votes.get(u) == "yes" for u in all_voters)
+    rejected = any(votes.get(u) == "no" for u in all_voters)
+
+    chat = project.get_chat("announcements")
+
+    if approved:
+        poll["status"] = "approved"
+        msg = f"📢 New deadline for task \"{poll['task_name']}\" approved: {poll['new_deadline']}"
+        chat.add_message("System", msg)
+
+    elif rejected:
+        poll["status"] = "rejected"
+        msg = f"📢 New deadline for task \"{poll['task_name']}\" was rejected by members."
+        chat.add_message("System", msg)
+
+    # ✅ Save and broadcast the poll before mutating activities
+    project.deadline_polls[task_id] = poll
+    project._p_changed = True
+    transaction.commit()
+
+    # ✅ Broadcast updated poll state first
+    if "announcements" in project_connections:
+        for conn in project_connections["announcements"]:
+            await conn.send_json({"action": "poll_vote", "poll": poll})
+            if approved or rejected:
+                await conn.send_json({"action": "new_message", "user": "System", "message": msg})
+
+    # ✅ If poll was approved, now update gantt data safely
+    if approved:
+        print("✅ Updating task:", poll["task_name"])
+        updated_gantt = []
+        for activity in project.gantt_chart:
+            if activity["name"] == poll["task_name"]:
+                start_date = datetime.datetime.strptime(activity["start_date"], "%Y-%m-%d")
+                new_end_date = datetime.datetime.strptime(poll["new_deadline"], "%Y-%m-%d")
+                new_days = max((new_end_date - start_date).days, 1)
+
+                activity["end_date"] = poll["new_deadline"]
+                activity["days"] = new_days
+
+                if "work_hours_per_day" in activity:
+                    activity["hours_to_complete"] = (
+                        int(activity["work_hours_per_day"]) * new_days
+                    )
+
+            updated_gantt.append(activity)
+
+        project.gantt_chart = updated_gantt
+        project._p_changed = True
+        transaction.commit()
+
+        # 🔁 Send update to Gantt clients
+        if project_code in project_connections:
+            awaitables = []
+            for conn in project_connections[project_code]:
+                awaitables.append(conn.send_json({
+                    "action": "gantt_chart_update",
+                    "activities": project.gantt_chart
+                }))
+            await asyncio.gather(*awaitables)
+
+        # ✅ Step 1: Remove all tasks from the calendar
+        if hasattr(project, "tasks"):
+            project.tasks.clear()  # This removes all tasks in the calendar
+
+        # ✅ Step 2: Add updated task back to the calendar
+        for activity in updated_gantt:
+            if "end_date" in activity:
+                assigned_users = []
+                for username in activity.get("assigned_to", []):
+                    user = db.get_user(username)
+                    if user:
+                        if user.profile_pic_data:
+                            encoded = base64.b64encode(user.profile_pic_data).decode()
+                            mime_type = "image/png" if user.profile_pic_data[:2] != b'\xff\xd8' else "image/jpeg"
+                            profile_pic = f"data:{mime_type};base64,{encoded}"
+                        else:
+                            profile_pic = "/static/profile_pics/default.png"
+
+                        assigned_users.append({
+                            "username": user.username,
+                            "profile_pic": profile_pic
+                        })
+
+                calendar_task = {
+                    "id": f"gantt-{activity['row_num']}",
+                    "date": activity["end_date"],
+                    "description": activity["name"],
+                    "user": "system",
+                    "color": "#fbc02d",
+                    "label": "Deadline",
+                    "time": None,
+                    "is_all_day": True,
+                    "assigned_to": assigned_users,
+                    "start_date": activity.get("start_date", ""),
+                    "predecessor": activity.get("predecessor", ""),
+                    "completed_seconds": activity.get("completed_seconds", 0),
+                    "hours_to_complete": int(activity.get("hours_to_complete", 1))
+                }
+
+                if activity["end_date"] not in project.tasks:
+                    project.tasks[activity["end_date"]] = []
+
+                project.tasks[activity["end_date"]].append(calendar_task)
+
+                # Notify calendar clients
+                if project_code in task_connections:
+                    for connection in task_connections[project_code]:
+                        await connection.send_json({
+                            "action": "task_update",
+                            "task": calendar_task
+                        })
+
+        print("\n📊 Gantt Chart After Poll Approval:")
+        for task in project.gantt_chart:
+            print({
+                "name": task.get("name"),
+                "start_date": task.get("start_date"),
+                "end_date": task.get("end_date"),
+                "days": task.get("days"),
+                "work_hours_per_day": task.get("work_hours_per_day"),
+                "hours_to_complete": task.get("hours_to_complete")
+            })
+        print("📦 END GANTT DATA\n")
+
+    return {"updated_poll": poll}
+
+
+
+
+
+@app.get("/get_poll")
+async def get_poll(project_code: str, task_id: str):
+    project = db.get_project(project_code)
+    if not project:
+        return JSONResponse(content={"error": "Project not found"}, status_code=404)
+    
+    poll = project.deadline_polls.get(task_id)
+    if not poll:
+        return JSONResponse(content={"error": "Poll not found"}, status_code=404)
+
+    return {"poll": poll}
 
 
 

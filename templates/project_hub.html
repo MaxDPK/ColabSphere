@@ -1551,7 +1551,9 @@
                         "task_id": task["id"],
                         "task_name": task["description"],
                         "new_deadline": new_deadline,
-                        "requested_by": username
+                        "requested_by": username,
+                        "start_date": task.get("start_date", ""),
+                        "current_end_date": task.get("date", "")
                     }),
                     headers={"Content-Type": "application/json"}
                 )

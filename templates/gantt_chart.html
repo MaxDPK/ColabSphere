@@ -303,7 +303,8 @@
                             latest_end_date = pred_end_date
         
             if latest_end_date:
-                return (latest_end_date + timedelta(days=1)).strftime("%Y-%m-%d")
+                return latest_end_date.strftime("%Y-%m-%d")
+
         
             return project_start.strftime("%Y-%m-%d")
         
@@ -442,24 +443,77 @@
         
             # ✅ **Redraw the Gantt chart with the updated start dates**
             update_gantt_chart()
-        
-        
-        def update_dependent_tasks(task_id, new_end_date):
-            """Shift the start dates of dependent tasks when their predecessor's end date changes."""
+
+        def update_dates_on_days_change(index, new_days_str):
+            """Update the end date based on the new number of days to complete."""
             global activities
+            if index < 0 or index >= len(activities):
+                return
+
+            try:
+                new_days = int(new_days_str)
+                if new_days < 1:
+                    return  # Do not allow less than 1 day
+            except:
+                return  # Invalid number
+
+            activity = activities[index]
+            activity["days"] = new_days
+            activity["end_date"] = calculate_end_date(activity["start_date"], new_days)
+
+            # ✅ Also update hours_to_complete
+            if activity.get("work_hours_per_day"):
+                activity["hours_to_complete"] = str(
+                    int(activity["work_hours_per_day"]) * new_days
+                )
+
+            console.log(f"📅 Updated Task {activity['name']}: Days → {new_days}, New End Date → {activity['end_date']}")
+
+            update_dependent_tasks(activity["row_num"], activity["end_date"])
+
+            # ✅ Recalculate critical path and update visuals
+            calculate_critical_path()
+            update_gantt_table()
+            update_gantt_chart()
+
         
-            for activity in activities:
-                if activity["predecessor"]:
-                    predecessors = activity["predecessor"].split(";")
         
-                    if task_id in predecessors:
-                        # ✅ Set new start date as 1 day after predecessor's end date
-                        activity["start_date"] = (datetime.strptime(new_end_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
-                        activity["end_date"] = calculate_end_date(activity["start_date"], activity["days"])
-        
-                        console.log(f"🔄 Adjusted Dependent Task {activity['name']}: Start Date → {activity['start_date']}, End Date → {activity['end_date']}")
-        
-        
+        def update_dependent_tasks(parent_row_num, new_parent_end_date):
+            """Update tasks that depend on the task with row number `parent_row_num`."""
+            global activities
+
+            for i, activity in enumerate(activities):
+                preds = activity.get("predecessor", "")
+                if not preds:
+                    continue
+
+                pred_rows = [p.strip() for p in preds.split(";") if p.strip()]
+                if str(parent_row_num) in pred_rows:
+                    # ✅ Update dependent task's start date based on the latest predecessor's end date
+                    old_start = activity["start_date"]
+                    activity["start_date"] = new_parent_end_date
+
+                    # ✅ Recalculate end date
+                    try:
+                        new_days = int(activity.get("days", "1"))
+                    except:
+                        new_days = 1
+
+                    activity["end_date"] = calculate_end_date(activity["start_date"], new_days)
+
+                    # ✅ Update hours to complete
+                    if activity.get("work_hours_per_day"):
+                        activity["hours_to_complete"] = str(
+                            int(activity["work_hours_per_day"]) * new_days
+                        )
+
+                    console.log(f"🔁 Dependent Task Updated: {activity['name']}, Start: {old_start} → {activity['start_date']}, End: {activity['end_date']}")
+
+                    # ✅ Recursively update tasks that depend on this one
+                    update_dependent_tasks(activity["row_num"], activity["end_date"])
+
+                
+                
         
 
         
@@ -632,7 +686,12 @@
                         input.type = "text"
                         input.value = activity.get(field, "")
                         input.setAttribute("data-field", field)
+
+                        if field == "days":
+                            input.addEventListener("change", create_proxy(lambda event, idx=i: update_dates_on_days_change(idx, event.target.value)))
+
                         cell.appendChild(input)
+
 
                     row.appendChild(cell)
 
