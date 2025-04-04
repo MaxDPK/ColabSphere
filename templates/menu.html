@@ -120,11 +120,13 @@
     </div>
 
     <!-- Modals -->
+    <!-- CREATE PROJECT MODAL -->
     <div class="overlay" id="overlay"></div>
     <div class="modal" id="modal">
         <h2>Create New Project</h2>
         <form method="POST" action="/create_project">
             <input type="text" name="project_name" placeholder="Enter project name" required>
+            <input type="hidden" name="user" value="{{ user }}">
             <button type="submit">Create</button>
         </form>
     </div>
@@ -133,16 +135,17 @@
         <h2>Join Project</h2>
     
         {% if error %}
-            <div class="join-error">{{ error }}</div>
+            <div style="color: red; margin-bottom: 10px;">{{ error }}</div>
         {% endif %}
-
     
         <form method="POST" action="/join_project">
             <input type="text" name="project_code" placeholder="Enter project code" required>
+            <input type="hidden" name="user" value="{{ user }}">
             <button type="submit">Join</button>
         </form>
     </div>
     
+
 
 
 

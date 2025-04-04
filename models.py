@@ -271,14 +271,19 @@ class Database:
         """Add a user to a project."""
         user = self.get_user(username)
         project = self.get_project(project_code)
-        if not user or not project or username in project.members:
-            return False
+
+        if not user or not project:
+            return "invalid_code"
+
+        if username in project.members:
+            return "already_member"
+
         project.members.append(username)
         project._p_changed = True
         user.projects.append(project_code)
         user._p_changed = True
         transaction.commit()
-        return True
+        return "success"
 
     # --------- CHAT MANAGEMENT ---------
     def get_chat(self, project_code, chat_id):
