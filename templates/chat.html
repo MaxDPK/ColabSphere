@@ -748,6 +748,7 @@
                     message_element.classList.add("message", "received")
                     message_element.textContent = message_data
                     messages_div.appendChild(message_element)
+                    return
 
             message_element = document.createElement("div")
             message_element.classList.add("message")
