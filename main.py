@@ -157,7 +157,7 @@ async def menu(request: Request, user: str):
             if user_data.profile_pic_data[:2] == b'\xff\xd8':  # JPEG magic bytes
                 image_header = "image/jpeg"
 
-            profile_pic = f"data:{image_header};base64,{encoded_image}"
+            profile_pic = f"data:{image_header} ;base64,{encoded_image}"
             
             # Debugging
             print(f"Final Base64 image string: {profile_pic[:100]}...")
@@ -180,39 +180,45 @@ async def menu(request: Request, user: str):
 
 
 
+
 @app.post("/create_project")
-async def create_project(request: Request, project_name: str = Form(...)):
-    user = request.cookies.get("user")  # Get the user from cookies
-    if not user:
-        return RedirectResponse("/login", status_code=303)  # Redirect to login if no user
-
-    project_code = db.create_project(project_name, user)  # Create the project
-    # Redirect to /menu with the user query parameter
-    return RedirectResponse(f"/menu?user={user}", status_code=303)
-
-
-
-
-
-
-@app.post("/join_project", response_class=HTMLResponse)
-async def join_project(request: Request, project_code: str = Form(...)):
-    user = request.cookies.get("user")
+async def create_project(
+    request: Request,
+    project_name: str = Form(...),
+    user: str = Form(...)
+):
     if not user:
         return RedirectResponse("/login", status_code=303)
 
-    success = db.add_user_to_project(user, project_code)
-    if success:
-        return RedirectResponse(f"/menu?user={user}", status_code=303)
+    project_code = db.create_project(project_name, user)
+    return RedirectResponse(f"/menu?user={user}", status_code=303)
 
-    # Failed case (already a member or invalid code)
+@app.post("/join_project", response_class=HTMLResponse)
+async def join_project(
+    request: Request,
+    project_code: str = Form(...),
+    user: str = Form(...)
+):
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    # Must return "success", "already_member", or "invalid_code"
+    result = db.add_user_to_project(user, project_code)
+
+    if result == "success":
+        return RedirectResponse(f"/menu?user={user}", status_code=303)
+    elif result == "already_member":
+        error_message = "You're already a member of this project!"
+    else:
+        error_message = "Invalid project code. Please check and try again."
+
+    # Load UI with error message
     user_data = db.get_user(user)
     projects = db.get_user_projects(user_data.username)
     profile_pic = "/static/profile_pics/default.png"
-    
+
     if user_data.profile_pic_data:
         try:
-            import base64
             encoded_image = base64.b64encode(user_data.profile_pic_data).decode('utf-8')
             image_header = "image/png"
             if user_data.profile_pic_data[:2] == b'\xff\xd8':
@@ -228,10 +234,9 @@ async def join_project(request: Request, project_code: str = Form(...)):
         "user": user,
         "profile_pic": profile_pic,
         "recent_projects": recent_projects,
-        "error": "Invalid project code or you are already a member.",
+        "error": error_message,
         "show_join_modal": True
     })
-
 
 @app.get("/project_hub/{project_code}", response_class=HTMLResponse)
 async def project_hub(request: Request, project_code: str, user: str):
@@ -818,7 +823,7 @@ async def logout():
 
 
 
-WHITEBOARD_DIR = "whiteboards"
+WHITEBOARD_DIR = "database/whiteboards"
 os.makedirs(WHITEBOARD_DIR, exist_ok=True)
 
 def get_whiteboard_path(project_code: str) -> str:
@@ -1585,3 +1590,62 @@ async def upload_file(
             content={"success": False, "error": str(e)},
             status_code=500
         )
+    
+
+@app.get("/project_notes/{project_code}")
+async def get_notes(project_code: str):
+    project = db.get_project(project_code)
+    if not project:
+        return {"notes": []}
+
+    if not hasattr(project, 'postit_notes'):
+        project.postit_notes = PersistentList()
+        transaction.commit()
+
+    return {"notes": list(project.postit_notes)}
+
+@app.post("/project_notes/{project_code}/add")
+async def add_note(project_code: str, data: dict = Body(...)):
+    project = db.get_project(project_code)
+    if not project:
+        return {"success": False}
+
+    note = project.add_postit_note(data["content"], data["x"], data["y"], data.get("color"))
+    return {"success": True, "note": note}
+
+@app.post("/project_notes/{project_code}/update")
+async def update_note_content(project_code: str, data: dict = Body(...)):
+    project = db.get_project(project_code)
+    if not project:
+        return {"success": False, "message": "Project not found"}
+
+    try:
+        note_id = data["id"]
+        new_content = data["content"]  # The updated content from the frontend
+        
+        # Find the note and update its content
+        note = next((note for note in project.postit_notes if note["id"] == note_id), None)
+        if note:
+            note["content"] = new_content  # Update content
+            project._p_changed = True
+            transaction.commit()
+            return {"success": True, "message": "Note updated successfully"}
+        else:
+            return {"success": False, "message": "Note not found"}
+    
+    except KeyError as e:
+        return {"success": False, "message": f"Missing key: {str(e)}"}
+
+
+@app.post("/project_notes/{project_code}/delete")
+async def delete_note(project_code: str, data: dict = Body(...)):
+    project = db.get_project(project_code)
+    if not project:
+        return {"success": False}
+
+    if not hasattr(project, 'postit_notes'):
+        project.postit_notes = PersistentList()
+        transaction.commit()
+
+    project.delete_postit_note(data["id"])
+    return {"success": True}

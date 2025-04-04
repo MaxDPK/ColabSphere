@@ -13,6 +13,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/project_hub.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    
+
+   
 </head>
 <body>
     <div class="sidebar">
@@ -40,7 +43,7 @@
             </ul>
         </div>
 
-
+        
   
 
        
@@ -48,9 +51,18 @@
     
     <div class="main-content">
         <!-- Add Settings Button -->
-        <button id="settings-btn" class="settings-btn">
-            <i class="fas fa-cog">⚙️</i>
-        </button>
+       <div class="main-content">
+    <div class="bottom-right-controls">
+        <a href="/project_whiteboard/{{ project.code }}?user={{ user }}" class="circle-btn tooltip" data-tooltip="Whiteboard">📝</a>
+        <a href="/gantt_chart?project_code={{ project.code }}&user={{ user }}" class="circle-btn tooltip" data-tooltip="Gantt Chart">📊</a>
+        <a href="/menu?user={{ user }}" class="circle-btn tooltip" data-tooltip="Back to Menu">↩️</a>
+        <button id="settings-btn" class="circle-btn tooltip" data-tooltip="Project Settings">⚙️</button>
+    </div>
+</div>
+
+        
+        
+        
         
         
 
@@ -88,15 +100,6 @@
             </ul>
             </div>
 
-            <!-- Project Actions Section -->
-            <div class="settings-section">
-            <h3>Project Actions</h3>
-            <div class="action-buttons">
-                <button class="action-btn invite-btn">Invite Team Member</button>
-                <button class="action-btn export-btn">Export Project Data</button>
-                <button class="action-btn leave-btn">Leave Project</button>
-            </div>
-            </div>
         </div>
         </div>
 
@@ -110,9 +113,7 @@
         
         
     
-        <a href="/project_whiteboard/{{ project.code }}?user={{ user }}">Go to Whiteboard</a>
-        <a href="/gantt_chart?project_code={{ project.code }}&user={{ user }}">Go to Gantt Chart</a>
-        <a href="/menu?user={{ user }}">Back to Menu</a>
+        
     </div>
 
         <!-- Rename Chat Modal -->
@@ -284,14 +285,13 @@
     </div>
 
 
-    <!-- Add task section icon -->
-    <div id="task-section-icon" class="task-section-icon">📋</div>
+  
 
     <!-- Task Section -->
-    <div class="task-section" style="display: none;">
+    <div class="task-section">
         <div class="task-section-header">
             <h2>My Assigned Tasks</h2>
-            <button class="pin-task-section">📌</button>
+            
         </div>
         <ul id="assigned-tasks">
             {% set row_to_task = {} %}
@@ -319,15 +319,18 @@
         
                     <!-- Progress Bar Container -->
                     <div class="progress-container">
-                        <div id="progress-{{ task['name'].replace(' ', '-') }}" class="progress-bar"
-                            style="width: {{ (task.get('completed_seconds', 0) / (task.get('hours_to_complete', 1) * 3600)) * 100 }}%;"
-                            data-total-hours="{{ task['hours_to_complete'] }}"
-                            data-completed-seconds="{{ task.get('completed_seconds', 0) }}">
+                        <div class="progress-bar-wrapper">
+                            <div id="progress-{{ task['name'].replace(' ', '-') }}" class="progress-bar"
+                                style="width: {{ (task.get('completed_seconds', 0) / (task.get('hours_to_complete', 1) * 3600)) * 100 }}%;"
+                                data-total-hours="{{ task['hours_to_complete'] }}"
+                                data-completed-seconds="{{ task.get('completed_seconds', 0) }}">
+                            </div>
                         </div>
                         <span id="progress-text-{{ task['name'].replace(' ', '-') }}" class="progress-text">
                             {{ ((task.get('completed_seconds', 0) / (task.get('hours_to_complete', 1) * 3600)) * 100) | round(1) }}%
                         </span>
                     </div>
+                    
         
                     {% if (task.get('completed_seconds', 0) / (task.get('hours_to_complete', 1) * 3600)) >= 1 %}
                         <p class="completed-text">✅ Task Completed</p>
@@ -376,8 +379,34 @@
         </div>
     </div>   
   
+    
+    
+    <div id= "wb-button-cotainer">
+    <button id="openWhiteboard" >📝</button>
+    </div>
 
+    <!-- Modal for Whiteboard -->
+    <div id="whiteboardModal" class="whiteboard-modal">
+        <div class="whiteboard-content">
+            <div id="toolbar">
+                <button id="pencil">✏️</button>
+                <button id="pen">🖊️</button>
+                <button id="eraser">🧹</button>
+                <button id="highlight">🟨</button>
+                <button id="clear">🗑️</button>
+                <input type="color" id="colorPicker" value="#000000">
+                <button id="closeWhiteboard">❌</button>
+                <button id="resizeWhiteboard">⤢</button>
+            </div>
+            <div id="whiteboard-container">
+                <div id="canvas-wrapper">
+                    <canvas id="whiteboard"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
 
+    <!-- PyScript for ProjectHub + Whiteboard Modal -->
     <py-script>
         import asyncio
         import json
@@ -2145,6 +2174,7 @@
                     "project_code": project_code, 
                     "channel_name": channel_name,
                     "members": selected_members  # ✅ Include selected members in request
+                    
                 })
                 
                 response = await pyfetch(
@@ -2554,7 +2584,7 @@
     
    
 
-        # here
+        
         def init_settings_modal():
             settings_btn = document.getElementById('settings-btn')
             settings_modal = document.getElementById('settings-modal')
@@ -2562,83 +2592,37 @@
             copy_project_code_btn = document.getElementById('copy-project-code')
             close_modal_btn = document.querySelector('.close-modal-btn')
             modal_content = settings_modal.querySelector('.modal-content')
-            leave_btn = document.querySelector('.leave-btn')
-
+        
             # ✅ Retrieve project code safely
             project_code_el = document.getElementById('project-code')
             if not project_code_el or not project_code_el.textContent:
                 console.error("❌ Project code is empty or not loaded.")
                 return
             project_code = project_code_el.textContent.strip()
-            # ✅ Other Action Buttons
-            def handle_invite(event):
-                window.alert('Invite functionality will be implemented soon!')
-
-            def handle_export(event):
-                window.alert('Export functionality will be implemented soon!')
-
-            def handle_leave(event):
-                console.log("🟥 Leave button clicked!")
-                if window.confirm("Are you sure you want to leave this project?"):
-                    # Send POST request to /leave_project
-                    async def send_leave_request():
-                        form_data = FormData.new()
-                        form_data.append("project_code", project_code)  # already defined earlier
-                        form_data.append("user", user)  # you should set this variable on load
-
-                        try:
-                            response = await fetch("/leave_project", {
-                                "method": "POST",
-                                "body": form_data
-                            })
-                            if response.ok:
-                                window.alert("You have left the project.")
-                                window.location.href = f"/menu?user={user}"
-                            else:
-                                error = await response.json()
-                                window.alert(f"❌ Failed to leave project: {error.get('error', 'Unknown error')}")
-                        except Exception as e:
-                            window.alert(f"❌ Network error: {str(e)}")
-
-                    asyncio.create_task(send_leave_request())
-
-
-            if leave_btn:
-                leave_btn.addEventListener('click', create_proxy(handle_leave))
-                console.log("🟢 Leave button listener added")
-            else:
-                console.error("❌ Leave button not found")
-
+        
             # ✅ Modal Open/Close Functions
             def open_modal(event):
                 overlay.style.display = 'block'
                 settings_modal.style.display = 'block'
                 document.body.style.overflow = 'hidden'
-
+        
             def close_modal(event):
                 overlay.style.display = 'none'
                 settings_modal.style.display = 'none'
                 document.body.style.overflow = 'auto'
-
+        
             def stop_propagation(event):
                 event.stopPropagation()
-
-            # ✅ Add Event Listeners
+        
             if settings_btn:
                 settings_btn.addEventListener("click", create_proxy(open_modal))
-                console.log('✅ Settings button listener added')
-            else:
-                console.error('❌ Settings button not found')
-
             if close_modal_btn:
                 close_modal_btn.addEventListener("click", create_proxy(close_modal))
-
             if overlay:
                 overlay.addEventListener("click", create_proxy(close_modal))
-
             if modal_content:
                 modal_content.addEventListener("click", create_proxy(stop_propagation))
-
+        
             # ✅ Clipboard Copy Function
             async def copy_project_code(event):
                 try:
@@ -2646,18 +2630,17 @@
                     show_copied_message()
                 except Exception as e:
                     console.error("❌ Copy failed:", str(e))
-
+        
             def show_copied_message():
                 original_text = copy_project_code_btn.textContent
                 copy_project_code_btn.textContent = 'Copied!'
                 def reset_text():
                     copy_project_code_btn.textContent = original_text
                 window.setTimeout(create_proxy(reset_text), 2000)
-
+        
             if copy_project_code_btn:
                 copy_project_code_btn.addEventListener("click", create_proxy(lambda e: asyncio.create_task(copy_project_code(e))))
-
-
+        
         def open_gantt_task_modal(task, click_x=None, click_y=None):
             from js import document
         
@@ -2933,6 +2916,175 @@
 
 
 
+        
+
+
+        # --- WhiteboardModal Class for Collaborative Whiteboard ---
+        class WhiteboardModal:
+            """Manage the collaborative whiteboard modal and drawing tools."""
+            def __init__(self, project_code, username):
+                self.project_code = project_code
+                self.username = username
+                self.ws = None
+                self.canvas = document.getElementById("whiteboard")
+                self.ctx = self.canvas.getContext("2d")
+                self.drawing = False
+                self.tool = "pen"
+                self.color_picker = document.getElementById("colorPicker")
+
+            async def connect_websocket(self):
+                """Connect WebSocket for whiteboard synchronization."""
+                protocol = "wss" if window.location.protocol == "https:" else "ws"
+                ws_url = f"{protocol}://{window.location.host}/ws/whiteboard/{self.project_code}"
+                self.ws = WebSocket.new(ws_url)
+                self.ws.addEventListener("message", create_proxy(self.handle_message))
+
+            def handle_message(self, event):
+                """Render strokes from WebSocket messages."""
+                data = json.loads(event.data)
+                if data.get("action") == "clear":
+                    self.ctx.clearRect(0, 0, self.canvas.width, self.canvas.height)
+                elif data.get("action") == "start":
+                    # Begin a new path when a new stroke is started.
+                    self.ctx.beginPath()
+                    self.ctx.moveTo(data["x"], data["y"])
+                else:
+                    # Continue drawing the stroke.
+                    self.ctx.strokeStyle = data.get("color", "black")
+                    self.ctx.lineWidth = data.get("lineWidth", 2)
+                    self.ctx.lineTo(data["x"], data["y"])
+                    self.ctx.stroke()
+            
+
+            def render_strokes(self, strokes):
+                """Render previously saved strokes."""
+                for stroke in strokes:
+                    if stroke.get("action") == "start":
+                        self.ctx.beginPath()
+                        self.ctx.moveTo(stroke["x"], stroke["y"])
+                    else:
+                        self.ctx.strokeStyle = stroke.get("color", "black")
+                        self.ctx.lineWidth = stroke.get("lineWidth", 2)
+                        self.ctx.lineTo(stroke["x"], stroke["y"])
+                        self.ctx.stroke()
+
+            def resize_canvas(self):
+                """Resize the canvas to fit the modal."""
+                self.canvas.width = window.innerWidth * 1
+                self.canvas.height = window.innerHeight * 1
+
+            def start_draw(self, event):
+                """Start a drawing path."""
+                self.drawing = True
+                self.ctx.beginPath()
+                self.ctx.moveTo(event.offsetX, event.offsetY)
+                self.ws.send(json.dumps({"action": "start", "x": event.offsetX, "y": event.offsetY}))
+
+            def draw(self, event):
+                """Continue drawing and broadcast updates."""
+                if not self.drawing:
+                    return
+                self.ctx.lineTo(event.offsetX, event.offsetY)
+                self.ctx.stroke()
+                self.ws.send(json.dumps({
+                    "x": event.offsetX, "y": event.offsetY,
+                    "color": self.color_picker.value if self.tool != "eraser" else "white",
+                    "lineWidth": self.ctx.lineWidth
+                }))
+
+            def stop_draw(self, event):
+                """Stop drawing path."""
+                self.drawing = False
+
+            def clear_canvas(self, event):
+                """Clear the canvas for all users."""
+                self.ctx.clearRect(0, 0, self.canvas.width, self.canvas.height)
+                self.ws.send(json.dumps({"action": "clear"}))
+
+            def set_tool(self, tool_type, color="black", width=2, alpha=1):
+                """Configure the drawing tool."""
+                self.tool = tool_type
+                self.ctx.strokeStyle = color
+                self.ctx.lineWidth = width
+                self.ctx.globalAlpha = alpha
+            
+            def resize_modal(self, event=None):
+                """Toggle between full-screen and bottom-right minimized modal."""
+                modal = document.getElementById("whiteboardModal")
+                content = document.querySelector(".modal-content")
+            
+                if not hasattr(self, 'modal_state'):
+                    self.modal_state = "normal"
+            
+                if self.modal_state == "normal":
+                    # Move and scale to bottom-right corner
+                    modal.style.width = f"{window.innerWidth}px"
+                    modal.style.height = f"{window.innerHeight}px"
+                    modal.style.left = "auto"
+                    modal.style.top = "auto"
+                    modal.style.right = "0"
+                    modal.style.bottom = "0"
+                    modal.style.backgroundColor = "rgba(0, 0, 0, 0.5)"
+                    modal.style.transform = "scale(0.5)"
+                    modal.style.transformOrigin = "bottom right"
+            
+                    self.modal_state = "lower"
+                else:
+                    # Restore to full-screen mode
+                    modal.style.width = "100%"
+                    modal.style.height = "100%"
+                    modal.style.left = "0"
+                    modal.style.top = "0"
+                    modal.style.right = "auto"
+                    modal.style.bottom = "auto"
+                    modal.style.backgroundColor = "rgba(0, 0, 0, 0.8)"
+                    modal.style.transform = "scale(1)"
+                    modal.style.transformOrigin = "center"
+            
+                    self.modal_state = "normal"
+            
+                console.log(f"Toggled modal size to {self.modal_state}")
+            
+            
+
+            def add_event_listeners(self):
+                """Configure tool and canvas event listeners."""
+                self.canvas.addEventListener("mousedown", create_proxy(self.start_draw))
+                self.canvas.addEventListener("mousemove", create_proxy(self.draw))
+                self.canvas.addEventListener("mouseup", create_proxy(self.stop_draw))
+                self.canvas.addEventListener("mouseleave", create_proxy(self.stop_draw))
+                document.getElementById("pencil").addEventListener("click", create_proxy(lambda e: self.set_tool("pencil", "black", 0.5)))
+                document.getElementById("pen").addEventListener("click", create_proxy(lambda e: self.set_tool("pen", self.color_picker.value, 2)))
+                document.getElementById("eraser").addEventListener("click", create_proxy(lambda e: self.set_tool("eraser", "white", 10)))
+                document.getElementById("highlight").addEventListener("click", create_proxy(lambda e: self.set_tool("highlight", self.color_picker.value, 10, 0.08)))
+                document.getElementById("clear").addEventListener("click", create_proxy(self.clear_canvas))
+                document.getElementById("resizeWhiteboard").addEventListener("click", create_proxy(self.resize_modal))
+
+
+
+
+        # Whiteboard modal handling
+        whiteboard_modal = WhiteboardModal(project_code, username)
+        modal_whiteboard = document.getElementById("whiteboardModal")
+        open_btn_whiteboard = document.getElementById("openWhiteboard")
+        close_btn_whiteboard = document.getElementById("closeWhiteboard")
+
+        open_btn_whiteboard.addEventListener("click", create_proxy(lambda e: (
+            setattr(whiteboard_modal, 'modal_state', 'normal'),
+            modal_whiteboard.style.setProperty("display", "block"),
+            modal_whiteboard.style.setProperty("width", "100%"),
+            modal_whiteboard.style.setProperty("height", "100%"),
+            modal_whiteboard.style.setProperty("left", "0"),
+            modal_whiteboard.style.setProperty("top", "0"),
+            modal_whiteboard.style.setProperty("right", "auto"),
+            modal_whiteboard.style.setProperty("bottom", "auto"),
+            modal_whiteboard.style.setProperty("background-color", "rgba(0, 0, 0, 0.8)"),
+            modal_whiteboard.style.setProperty("transform", "scale(1)"),
+            whiteboard_modal.resize_canvas(),
+            asyncio.ensure_future(whiteboard_modal.connect_websocket()),
+            whiteboard_modal.add_event_listeners()
+        )))
+        close_btn_whiteboard.addEventListener("click", create_proxy(lambda e: modal_whiteboard.style.setProperty("display", "none")))
     </py-script>
 
 
