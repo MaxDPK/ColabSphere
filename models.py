@@ -57,14 +57,25 @@ class Project(Persistent):
         self.gantt_chart = []  # List to store Gantt chart activities
         self.chats = []  # Store chat objects
         self.tasks = PersistentMapping()
+        self.deadline_polls = PersistentMapping()
        
-        self.create_general_chat()
+        self.create_default_chat()
 
-    def create_general_chat(self):
-        """Ensure a default general chat exists."""
-        if not any(chat.chat_id == "general1" for chat in self.chats):
-            general_chat = Chat("general1", self.members)
-            self.chats.append(general_chat)
+    def create_default_chat(self):
+        default_chats = ["general1", "announcements"]
+        for chat_name in default_chats:
+            existing = next((chat for chat in self.chats if chat.chat_id == chat_name), None)
+            if existing:
+                # 🔁 Make sure all current members are in the chat
+                for member in self.members:
+                    if member not in existing.participants:
+                        existing.participants.append(member)
+                        existing._p_changed = True
+            else:
+                # 🆕 Create new chat if it doesn't exist
+                default_chat = Chat(chat_name, self.members)
+                self.chats.append(default_chat)
+
 
     def get_chat(self, chat_id):
         """Retrieve a chat by ID."""

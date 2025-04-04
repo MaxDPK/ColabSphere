@@ -260,8 +260,9 @@ async def project_hub(request: Request, project_code: str, user: str):
     total_required = sum(task["hours_to_complete"] * 3600 for task in all_tasks)
     overall_progress = round((total_done / total_required) * 100, 1) if total_required > 0 else 0
     
-    if not any(chat.chat_id == "general1" for chat in project.chats):
-        project.create_general_chat()
+
+    project.create_default_chat()
+
 
 
     # ✅ Update the recent projects list for the user
@@ -569,10 +570,16 @@ async def save_gantt_chart(data: dict = Body(...)):
                     "activities": activities
                 })
 
-        # Push deadlines to calendar
-        if not hasattr(project, "tasks"):
+        # Step 1: Remove all old Gantt tasks from the calendar
+        if hasattr(project, "tasks"):
+            for date in list(project.tasks.keys()):
+                project.tasks[date] = [t for t in project.tasks[date] if not t["id"].startswith("gantt-")]
+                if not project.tasks[date]:  # Clean up empty lists
+                    del project.tasks[date]
+        else:
             project.tasks = {}
 
+        # Step 2: Add updated Gantt tasks
         for activity in activities:
             if "end_date" in activity:
                 assigned_users = []
@@ -607,15 +614,8 @@ async def save_gantt_chart(data: dict = Body(...)):
                     "hours_to_complete": int(activity.get("hours_to_complete", 1))
                 }
 
-
-
                 if activity["end_date"] not in project.tasks:
                     project.tasks[activity["end_date"]] = []
-
-                project.tasks[activity["end_date"]] = [
-                    t for t in project.tasks[activity["end_date"]]
-                    if not t["id"].startswith("gantt-") or t["id"] != calendar_task["id"]
-                ]
 
                 project.tasks[activity["end_date"]].append(calendar_task)
 
@@ -626,6 +626,7 @@ async def save_gantt_chart(data: dict = Body(...)):
                             "action": "task_update",
                             "task": calendar_task
                         })
+
 
         project._p_changed = True
         transaction.commit()
@@ -1041,6 +1042,84 @@ async def update_chat_members(data: dict = Body(...)):
     transaction.commit()
 
     return {"message": "Chat members updated successfully"}
+
+@app.post("/request_deadline_poll")
+async def request_deadline_poll(data: dict = Body(...)):
+    project_code = data.get("project_code")
+    task_id = data.get("task_id")
+    task_name = data.get("task_name")
+    new_deadline = data.get("new_deadline")
+    requested_by = data.get("requested_by")
+
+    project = db.get_project(project_code)
+    if not project:
+        return JSONResponse(content={"error": "Project not found"}, status_code=404)
+
+    # ✅ Avoid duplicate poll for the same task
+    if task_id in project.deadline_polls:
+        return JSONResponse(content={"error": "A deadline extension poll already exists for this task."}, status_code=400)
+
+    # ✅ Build poll object
+    poll_data = {
+        "poll_type": "deadline_extension",
+        "task_id": task_id,
+        "task_name": task_name,
+        "new_deadline": new_deadline,
+        "requested_by": requested_by,
+        "votes": {requested_by: "yes"},  # Auto-approve self
+        "participants": project.members,
+        "status": "ongoing"
+    }
+
+    # ✅ Save to backend
+    project.deadline_polls[task_id] = poll_data
+    project._p_changed = True
+    transaction.commit()
+
+    # ✅ Send poll to "announcements" chat
+    chat = project.get_chat("announcements")
+    if not chat:
+        return JSONResponse(content={"error": "Announcements chat not found"}, status_code=404)
+
+    chat.add_message("System", json.dumps({"poll": poll_data}))
+
+    # ✅ Broadcast poll to WebSocket clients
+    if "announcements" in project_connections:
+        for connection in project_connections["announcements"]:
+            await connection.send_json({
+                "action": "poll",
+                "poll": poll_data
+            })
+
+    # ✅ Broadcast poll update to all members via WebSocket
+    for chat_id, connections in project_connections.items():
+        for connection in connections:
+            await connection.send_json({
+                "action": "deadline_poll_requested",
+                "task_id": task_id
+            })
+
+
+    return {"message": "Poll created and sent"}
+
+
+@app.get("/get_requested_deadlines")
+async def get_requested_deadlines(project_code: str):
+    project = db.get_project(project_code)
+    if not project:
+        return JSONResponse(content={"requested_task_ids": [], "details": {}}, status_code=404)
+
+    requested_ids = []
+    details = {}
+
+    for task_id, poll in project.deadline_polls.items():
+        requested_ids.append(task_id)
+        details[task_id] = {
+            "new_deadline": poll.get("new_deadline"),
+            "status": poll.get("status", "ongoing")
+        }
+
+    return {"requested_task_ids": requested_ids, "details": details}
 
 
 

@@ -365,8 +365,16 @@
         </div>
         <ul id="notification-list"></ul>
     </div>
-    
-    
+
+    <div id="deadlineModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+        background:#fff; padding:20px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:10000;">
+        <h3>Request New Deadline</h3>
+        <input type="date" id="new-deadline-picker" style="margin-top:10px;"/>
+        <div style="margin-top:15px;">
+            <button id="confirm-deadline">Confirm</button>
+            <button id="cancel-deadline">Cancel</button>
+        </div>
+    </div>   
   
 
 
@@ -380,6 +388,7 @@
         from pyodide.http import pyfetch
         import math
         import datetime
+        from datetime import timedelta
 
         stored_notifications = []
 
@@ -1028,6 +1037,14 @@
 
                     console.log(f"🔴 User stopped working on {task_name}. Active users: {active_users_per_task.get(task_key, 0)}")
 
+                elif data.get("action") == "deadline_poll_requested":
+                    async def refresh_ui():
+                        await fetch_requested_deadlines()
+                        show_todays_tasks()
+
+                    asyncio.ensure_future(refresh_ui())
+
+
             except Exception as e:
                 console.error("Error processing WebSocket message:", str(e))
 
@@ -1354,69 +1371,235 @@
             button.addEventListener("click", create_proxy(stopWork_proxy))
 
 
+        requested_deadlines = set()
+        deadline_poll_details = {}  # 🔥 Store new_deadline + status
+
+
+        async def fetch_requested_deadlines():
+            global requested_deadlines, deadline_poll_details
+            try:
+                response = await pyfetch(f"/get_requested_deadlines?project_code={project_code}", method="GET")
+                data = await response.json()
+                requested_deadlines = set(data.get("requested_task_ids", []))
+                deadline_poll_details = data.get("details", {})
+                print("📦 Fetched requested deadlines:", requested_deadlines)
+            except Exception as e:
+                print("❌ Failed to fetch requested deadlines:", e)
+
+
+
         def show_todays_tasks():
             global task_data_by_date
 
-            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            today = datetime.datetime.now()
+            today_date = today.date()
+
             list_el = document.getElementById("todays-task-list")
             list_el.innerHTML = ""
 
-            if today not in task_data_by_date or not task_data_by_date[today]:
+            has_tasks_today = False
+
+            for date_str, tasks in task_data_by_date.items():
+                try:
+                    task_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+                except:
+                    continue
+
+                delta_days = (task_date - today_date).days
+
+                for task in tasks:
+                    is_gantt = task["id"].startswith("gantt-")
+                    message = None
+
+                    # Gantt task special cases
+                    if is_gantt:
+                        completed_sec = int(task.get("completed_seconds", 0))
+                        hours_needed = max(1, int(task.get("hours_to_complete", 1)))
+                        total_sec_required = hours_needed * 3600
+
+                        if delta_days == 5:
+                            message = f"{task['description']} - 5 days left"
+                        elif delta_days == 1:
+                            message = f"{task['description']} - 1 day left"
+                        elif delta_days == 0:
+                            message = f"{task['description']} - due today"
+                        elif delta_days < 0 and completed_sec < total_sec_required:
+                            message = f"{task['description']} - OVERDUE"
+
+                    # Normal tasks for today or due Gantt tasks
+                    if date_str == today.strftime("%Y-%m-%d") or message:
+                        li = document.createElement("li")
+                        li.style.marginBottom = "10px"
+                        li.style.fontFamily = "Arial, sans-serif"
+
+                        bullet = document.createElement("span")
+                        bullet.textContent = "• "
+                        bullet.style.color = "#354D2F"
+                        bullet.style.fontSize = "14px"
+                        bullet.style.marginRight = "4px"
+
+                        desc = document.createElement("span")
+
+                        # If Gantt message exists, show that instead of just the description
+                        desc.textContent = message if message else task["description"]
+                        desc.style.fontWeight = "bold"
+                        desc.style.fontSize = "14px"
+                        desc.style.color = "#222"
+
+                        time = document.createElement("span")
+                        time.textContent = "" if task.get("is_all_day") else f" {task.get('time', '')}"
+                        time.style.fontSize = "13px"
+                        time.style.color = "#666"
+                        time.style.marginLeft = "4px"
+
+                        
+
+                        li.appendChild(bullet)
+                        li.appendChild(desc)
+                        li.appendChild(time)
+                        if message and "OVERDUE" in message:
+                            if task["id"] in requested_deadlines:
+                                # Show status message instead of button
+                                info = deadline_poll_details.get(task["id"], {})
+                                new_date = info.get("new_deadline", "?")
+                                status = info.get("status", "ongoing")
+
+                                # Line: Requesting new deadline
+                                req_line = document.createElement("div")
+                                req_line.textContent = f"Requesting new deadline: {new_date}"
+                                req_line.style.fontSize = "13px"
+                                req_line.style.color = "#444"
+                                req_line.style.marginLeft = "18px"
+                                req_line.style.marginTop = "4px"
+
+                                # Line: Poll status
+                                status_line = document.createElement("div")
+                                if status == "approved":
+                                    status_line.textContent = "✅ Poll Approved"
+                                    status_line.style.color = "#4caf50"
+                                elif status == "rejected":
+                                    status_line.textContent = "❌ Poll Rejected"
+                                    status_line.style.color = "#f44336"
+                                else:
+                                    status_line.textContent = "⏳ Poll Ongoing"
+                                    status_line.style.color = "#999"
+
+                                status_line.style.fontSize = "13px"
+                                status_line.style.marginLeft = "18px"
+                                status_line.style.marginTop = "2px"
+
+                                li.appendChild(req_line)
+                                li.appendChild(status_line)
+
+                            else:
+                                extend_btn = document.createElement("button")
+                                extend_btn.textContent = "Extend Deadline"
+                                extend_btn.style.marginLeft = "10px"
+                                extend_btn.style.padding = "4px 8px"
+                                extend_btn.style.borderRadius = "8px"
+                                extend_btn.style.fontSize = "12px"
+                                extend_btn.style.cursor = "pointer"
+                                extend_btn.style.backgroundColor = "#b71c1c"
+                                extend_btn.style.color = "#fff"
+
+                                def on_extend_click(event, task=task):
+                                    event.preventDefault()
+                                    open_deadline_modal(task)
+
+                                extend_btn.addEventListener("click", create_proxy(on_extend_click))
+                                li.appendChild(extend_btn)
+
+
+
+                        list_el.appendChild(li)
+                        has_tasks_today = True
+
+            if not has_tasks_today:
                 li = document.createElement("li")
                 li.textContent = "No tasks scheduled for today."
                 li.style.color = "#888"
                 list_el.appendChild(li)
-                return
 
-            for task in task_data_by_date[today]:
-                li = document.createElement("li")
-                li.style.marginBottom = "10px"
-                li.style.fontFamily = "Arial, sans-serif"
+        
+        def open_deadline_modal(task):
+            modal = document.getElementById("deadlineModal")
+            picker = document.getElementById("new-deadline-picker")
 
-                bullet = document.createElement("span")
-                bullet.textContent = "• "
-                bullet.style.color = "#354D2F"
-                bullet.style.fontSize = "14px"
-                bullet.style.marginRight = "4px"
+            modal.style.display = "block"
+            picker.value = ""
 
-                desc = document.createElement("span")
-                desc.textContent = task["description"]
-                desc.style.fontWeight = "bold"
-                desc.style.fontSize = "14px"
-                desc.style.color = "#222"
+            def close_modal(e=None):
+                modal.style.display = "none"
 
-                time = document.createElement("span")
-                time.textContent = "" if task.get("is_all_day") else f" {task.get('time', '')}"
-                time.style.fontSize = "13px"
-                time.style.color = "#666"
-                time.style.marginLeft = "4px"
-
-                li.appendChild(bullet)
-                li.appendChild(desc)
-                li.appendChild(time)
-                list_el.appendChild(li)
+            def confirm_deadline(e=None):
+                new_date = picker.value
+                if new_date:
+                    modal.style.display = "none"
+                    asyncio.ensure_future(request_deadline_poll(task, new_date))
 
 
+            document.getElementById("cancel-deadline").addEventListener("click", create_proxy(close_modal))
+            document.getElementById("confirm-deadline").addEventListener("click", create_proxy(confirm_deadline))
+
+        async def request_deadline_poll(task, new_deadline):
+            try:
+                response = await pyfetch(
+                    "/request_deadline_poll",
+                    method="POST",
+                    body=json.dumps({
+                        "project_code": project_code,
+                        "task_id": task["id"],
+                        "task_name": task["description"],
+                        "new_deadline": new_deadline,
+                        "requested_by": username
+                    }),
+                    headers={"Content-Type": "application/json"}
+                )
+
+                data = await response.json()
+                print("✅ Poll created:", data)
+
+                # Update UI button
+                btns = document.querySelectorAll(f"[data-task-id='{task['id']}']")
+                for btn in btns:
+                    btn.textContent = f"Requesting new deadline: {new_deadline}"
+                    btn.disabled = True
+
+            except Exception as e:
+                print("❌ Failed to request poll:", e)
+
+
+
+
+
+        
         
         def init_all():
             """Initialize all event handlers and components"""
             global select_color_proxy, more_click_proxy
-            
+
             init_calendar()
-            
+
             select_color_proxy = create_proxy(select_color)
             for el in document.querySelectorAll('.color-option'):
                 el.addEventListener('click', select_color_proxy)
-                
+
             more_click_proxy = create_proxy(_on_more_click)
-            
+
             init_edit_task_handlers()
-            
+
             # Start the processes
             asyncio.ensure_future(connect_websocket())
             asyncio.ensure_future(fetch_channels())
             update_calendar()
-            show_todays_tasks()
+
+            # Fetch deadlines before showing today's tasks
+            async def init_tasks():
+                await fetch_requested_deadlines()
+                show_todays_tasks()
+
+            asyncio.ensure_future(init_tasks())
+
         
         def update_calendar():
             global current_year, current_month
@@ -2663,42 +2846,83 @@
         initialize_task_section()
 
         def show_upcoming_task_notifications():
-            """Check task_data_by_date and display tasks for today in a notification."""
+            """Show all relevant Gantt deadline notifications + today's normal tasks."""
             global task_data_by_date, stored_notifications
 
-            today = datetime.datetime.now()  # 👈 Add this to define `today`
+            today = datetime.datetime.now()
             today_str = today.strftime("%Y-%m-%d")
 
-            if today_str not in task_data_by_date or not task_data_by_date[today_str]:
-                console.log("📭 No tasks scheduled for today.")
-                return
-
-            tasks = task_data_by_date[today_str]
             notification = document.getElementById("task-notification")
             list_el = document.getElementById("notification-list")
-
             list_el.innerHTML = ""
+            stored_notifications = []
 
-            for task in tasks:
-                li = document.createElement("li")
-                time = task.get("time", "All Day") if not task.get("is_all_day", False) else "All Day"
-                li.textContent = f"{time} - {task['description']}"
-                list_el.appendChild(li)
+            added_gantt_ids = set()
 
-                stored_notifications.append(f"{time} - {task['description']}")
+            for date_str, tasks in task_data_by_date.items():
+                try:
+                    task_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+                except:
+                    continue
 
-            notification.classList.add("show")
-            window.setTimeout(
-                create_proxy(lambda: notification.classList.remove("show")),
-                10000
-            )
 
-            close_btn = notification.querySelector(".close-notification")
-            def close_notification(event):
-                notification.classList.remove("show")
-            close_btn.addEventListener("click", create_proxy(close_notification))
+                task_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+                today_date = today.date()
+                task_date_only = task_date.date()
+                delta_days = (task_date_only - today_date).days
 
-            console.log(f"🔔 Displayed {len(tasks)} task(s) for today.")
+
+
+                for task in tasks:
+                    is_gantt = task["id"].startswith("gantt-")
+                    message = None
+
+                    if is_gantt:
+                        completed_sec = int(task.get("completed_seconds", 0))
+                        hours_needed = max(1, int(task.get("hours_to_complete", 1)))
+                        total_sec_required = hours_needed * 3600
+
+                        if delta_days == 5:
+                            message = f"{task['description']} - 5 days left"
+                        elif delta_days == 1:
+                            message = f"{task['description']} - 1 day left"
+                        elif delta_days == 0:
+                            message = f"{task['description']} - due today"
+                        elif delta_days < 0 and completed_sec < total_sec_required:
+                            message = f"{task['description']} - OVERDUE"
+
+                        if message and task["id"] not in added_gantt_ids:
+                            li = document.createElement("li")
+                            li.textContent = message
+                            list_el.appendChild(li)
+                            stored_notifications.append(message)
+                            added_gantt_ids.add(task["id"])
+
+                    # Also handle normal tasks for today
+                    elif date_str == today_str:
+                        time = task.get("time", "All Day") if not task.get("is_all_day", False) else "All Day"
+                        msg = f"{time} - {task['description']}"
+                        li = document.createElement("li")
+                        li.textContent = msg
+                        list_el.appendChild(li)
+                        stored_notifications.append(msg)
+
+            if stored_notifications:
+                notification.classList.add("show")
+                window.setTimeout(
+                    create_proxy(lambda: notification.classList.remove("show")),
+                    10000
+                )
+
+                close_btn = notification.querySelector(".close-notification")
+                def close_notification(event):
+                    notification.classList.remove("show")
+                close_btn.addEventListener("click", create_proxy(close_notification))
+
+                console.log(f"🔔 Displayed {len(stored_notifications)} notification(s).")
+            else:
+                console.log("📭 No notifications to show.")
+
 
 
 

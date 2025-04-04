@@ -457,7 +457,7 @@
 
     <py-script>
         import asyncio
-        from js import document, WebSocket, window, File, FileReader, Object
+        from js import document, WebSocket, window, File, FileReader, Object, console
         from pyodide.ffi import create_proxy
         import json
         import base64
@@ -570,40 +570,154 @@
                     create_message_element(data["user"], data["message"])
                     messages_div = document.getElementById("messages")
                     messages_div.scrollTop = messages_div.scrollHeight
-    
-        def create_message_element(user, message_data):
-            """Creates a styled message element and adds it to the chat."""
+            elif data.get("action") == "poll":
+                print("📮 Received poll:", data["poll"])
+                create_poll_element(data["poll"])
+
+        def create_poll_element(poll):
+            console.log("🛠️ Inside create_poll_element:", poll)
+
             messages_div = document.getElementById("messages")
+
+            poll_wrapper = document.createElement("div")
+            poll_wrapper.classList.add("message", "received")
+            poll_wrapper.style.backgroundColor = "#fffbea"
+            poll_wrapper.style.border = "1px solid #f0d000"
+            poll_wrapper.style.padding = "12px"
+            poll_wrapper.style.borderRadius = "12px"
+            poll_wrapper.id = f"poll-{poll['task_id']}"
+
+            header = document.createElement("div")
+            header.style.fontWeight = "600"
+            header.style.marginBottom = "8px"
+            header.textContent = f"📊 Extend deadline for \"{poll['task_name']}\"?"
+
+            subtext = document.createElement("div")
+            subtext.style.fontSize = "13px"
+            subtext.style.marginBottom = "8px"
+            subtext.innerHTML = (
+                f"<strong>Requested by:</strong> {poll['requested_by']}<br>"
+                f"<strong>New Deadline:</strong> {poll['new_deadline']}"
+            )
+
+            voter_list = document.createElement("div")
+            voter_list.style.marginTop = "10px"
+            voter_list.style.borderTop = "1px solid #ccc"
+            voter_list.style.paddingTop = "10px"
+
+            for voter in poll["participants"]:
+                # ❌ Skip rendering vote row for requester
+                if voter == poll["requested_by"]:
+                    continue
+
+                row = document.createElement("div")
+                row.style.display = "flex"
+                row.style.justifyContent = "space-between"
+                row.style.alignItems = "center"
+                row.style.marginBottom = "6px"
+
+                name = document.createElement("span")
+                name.textContent = voter
+
+                vote_btns = document.createElement("div")
+                vote_btns.style.display = "flex"
+                vote_btns.style.gap = "6px"
+
+                vote = poll["votes"].get(voter)
+
+                if vote == "yes":
+                    status = document.createElement("span")
+                    status.textContent = "✅ Approved"
+                    status.style.color = "#4caf50"
+                elif vote == "no":
+                    status = document.createElement("span")
+                    status.textContent = "❌ Rejected"
+                    status.style.color = "#f44336"
+                elif voter == username:
+                    # Only allow current user to vote
+                    approve_btn = document.createElement("button")
+                    approve_btn.textContent = "✅ Approve"
+                    approve_btn.style.padding = "4px 10px"
+                    approve_btn.style.borderRadius = "8px"
+                    approve_btn.style.border = "none"
+                    approve_btn.style.cursor = "pointer"
+                    approve_btn.style.backgroundColor = "#4caf50"
+                    approve_btn.style.color = "#fff"
+                    approve_btn.onclick = create_proxy(lambda e: vote_poll(poll, "yes"))
+
+                    reject_btn = document.createElement("button")
+                    reject_btn.textContent = "❌ Reject"
+                    reject_btn.style.padding = "4px 10px"
+                    reject_btn.style.borderRadius = "8px"
+                    reject_btn.style.border = "none"
+                    reject_btn.style.cursor = "pointer"
+                    reject_btn.style.backgroundColor = "#f44336"
+                    reject_btn.style.color = "#fff"
+                    reject_btn.onclick = create_proxy(lambda e: vote_poll(poll, "no"))
+
+                    vote_btns.appendChild(approve_btn)
+                    vote_btns.appendChild(reject_btn)
+                    status = vote_btns
+                else:
+                    status = document.createElement("span")
+                    status.textContent = "⏳ Awaiting vote"
+                    status.style.color = "#999"
+
+                row.appendChild(name)
+                row.appendChild(status)
+                voter_list.appendChild(row)
+
+            poll_wrapper.appendChild(header)
+            poll_wrapper.appendChild(subtext)
+            poll_wrapper.appendChild(voter_list)
+            messages_div.appendChild(poll_wrapper)
+            messages_div.scrollTop = messages_div.scrollHeight
+
+
+                
+        def create_message_element(user, message_data):
+            messages_div = document.getElementById("messages")
+
+            # ✅ Check if the message is a poll from a system user
+            if user == "System":
+                try:
+                    parsed = json.loads(message_data)
+                    if "poll" in parsed:
+                        console.log("📥 Rendering poll message:", parsed["poll"])
+                        create_poll_element(parsed["poll"])
+                        return  # ✅ Don't continue normal message rendering
+                except Exception as e:
+                    console.log("⚠️ Failed to parse system message as poll:", e)
+
             message_element = document.createElement("div")
             message_element.classList.add("message")
             message_element.classList.add("received" if user != username else "sent")
-            
+
             sender = document.createElement("div")
             sender.classList.add("sender")
             sender.textContent = user
-            
+
             content = document.createElement("div")
             content.classList.add("message-content")
-            
+
+            # 📁 Handle file messages (from both stringified and object forms)
             if isinstance(message_data, str):
                 try:
-                    # Try to parse as JSON in case it's a file message
                     data = json.loads(message_data.replace(f"{user}: ", "", 1))
                     if isinstance(data, dict) and "file" in data:
-                        # Handle file message
                         if data.get("text"):
                             text_div = document.createElement("div")
                             text_div.textContent = data["text"]
                             content.appendChild(text_div)
-                        
+
                         attachment = document.createElement("div")
                         attachment.classList.add("message-attachment")
-                        
+
                         file_data = data["file"]
                         file_type = file_data["type"]
                         file_url = f"/static/uploads/{file_data['name']}"
                         display_name = file_data.get("original_name", file_data["name"])
-                        
+
                         if file_type.startswith("image/"):
                             img = document.createElement("img")
                             img.src = file_url
@@ -611,21 +725,18 @@
                             img.style.cursor = "pointer"
                             img.onclick = create_proxy(lambda e: window.open(file_url, "_blank"))
                             attachment.appendChild(img)
-                            
-                            # Add image filename below
+
                             name_div = document.createElement("div")
                             name_div.style.marginTop = "5px"
                             name_div.style.fontSize = "0.9em"
                             name_div.textContent = display_name
                             attachment.appendChild(name_div)
                         else:
-                            # Create a styled download link for non-image files
                             link = document.createElement("a")
                             link.href = file_url
                             link.target = "_blank"
                             link.download = display_name
-                            
-                            # Add file icon and styling
+
                             icon_span = document.createElement("span")
                             icon_span.classList.add("file-icon")
                             if file_type == "application/pdf":
@@ -636,37 +747,37 @@
                                 icon_span.textContent = "🎵"
                             else:
                                 icon_span.textContent = "📎"
-                            
-                            # Create file name span
+
                             name_span = document.createElement("span")
                             name_span.textContent = " " + display_name
                             name_span.style.marginLeft = "5px"
-                            
+
                             link.appendChild(icon_span)
                             link.appendChild(name_span)
                             attachment.appendChild(link)
-                        
+
                         content.appendChild(attachment)
                     else:
                         content.textContent = message_data.replace(f"{user}: ", "", 1)
                 except:
                     content.textContent = message_data.replace(f"{user}: ", "", 1)
+
             else:
-                # Handle direct message data objects
+                # If message_data is already a dict (rare case)
                 if "file" in message_data:
                     if message_data.get("text"):
                         text_div = document.createElement("div")
                         text_div.textContent = message_data["text"]
                         content.appendChild(text_div)
-                    
+
                     attachment = document.createElement("div")
                     attachment.classList.add("message-attachment")
-                    
+
                     file_data = message_data["file"]
                     file_type = file_data["type"]
                     file_url = f"/static/uploads/{file_data['name']}"
                     display_name = file_data.get("original_name", file_data["name"])
-                    
+
                     if file_type.startswith("image/"):
                         img = document.createElement("img")
                         img.src = file_url
@@ -674,21 +785,18 @@
                         img.style.cursor = "pointer"
                         img.onclick = create_proxy(lambda e: window.open(file_url, "_blank"))
                         attachment.appendChild(img)
-                        
-                        # Add image filename below
+
                         name_div = document.createElement("div")
                         name_div.style.marginTop = "5px"
                         name_div.style.fontSize = "0.9em"
                         name_div.textContent = display_name
                         attachment.appendChild(name_div)
                     else:
-                        # Create a styled download link for non-image files
                         link = document.createElement("a")
                         link.href = file_url
                         link.target = "_blank"
                         link.download = display_name
-                        
-                        # Add file icon and styling
+
                         icon_span = document.createElement("span")
                         icon_span.classList.add("file-icon")
                         if file_type == "application/pdf":
@@ -699,24 +807,24 @@
                             icon_span.textContent = "🎵"
                         else:
                             icon_span.textContent = "📎"
-                        
-                        # Create file name span
+
                         name_span = document.createElement("span")
                         name_span.textContent = " " + display_name
                         name_span.style.marginLeft = "5px"
-                        
+
                         link.appendChild(icon_span)
                         link.appendChild(name_span)
                         attachment.appendChild(link)
-                    
+
                     content.appendChild(attachment)
                 else:
                     content.textContent = message_data
-            
+
             message_element.appendChild(sender)
             message_element.appendChild(content)
             messages_div.appendChild(message_element)
             messages_div.scrollTop = messages_div.scrollHeight
+
 
         def on_error(event):
             """Handle WebSocket errors."""
