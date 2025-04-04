@@ -15,66 +15,7 @@
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
     
 
-    <style>
-        
-        #toolbar {
-            width: 60px;
-            background: white;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 10px;
-            box-shadow: 2px 0px 5px rgba(0, 0, 0, 0.2);
-            z-index: 10;
-        }
-        #closeWhiteboard {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background: red;
-            color: white;
-            border: none;
-            padding: 5px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        #resizeWhiteboard {
-            background: gray;
-            top: 5px;
-            right: 10px;
-            color: white;
-            border: none;
-            padding: 5px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        button {
-            width: 40px;
-            height: 40px;
-            margin: 10px;
-            border: none;
-            cursor: pointer;
-            background: lightgray;
-        }
-        canvas {
-            position: absolute;
-            top: 0;
-            left: 60px; /* Same width as toolbar */
-            right: 0;
-            bottom: 0;
-            background: white;
-        }
-        #whiteboard-container {
-            flex: 1;
-            display: flex;
-        }
-
-        
-        .status-online { color: green; }
-        .status-offline { color: red; }
-    </style>
+   
 </head>
 <body>
     <div class="sidebar">
@@ -102,7 +43,7 @@
             </ul>
         </div>
 
-
+        
   
 
        
@@ -171,10 +112,6 @@
           </div>
         
         
-    
-        <a href="/project_whiteboard/{{ project.code }}?user={{ user }}">Go to Whiteboard</a>
-        <a href="/gantt_chart?project_code={{ project.code }}&user={{ user }}">Go to Gantt Chart</a>
-        <a href="/menu?user={{ user }}">Back to Menu</a>
     </div>
 
         <!-- Rename Chat Modal -->
@@ -429,17 +366,13 @@
     </div>
     
     
-  
-
-
-   
-    <button id="openWhiteboard">🖋️ Open Whiteboard</button>
-    <a href="/gantt_chart?project_code={{ project.code }}&user={{ user }}">Go to Gantt Chart</a>
-    <a href="/menu?user={{ user }}">Back to Menu</a>
+    <div id= "wb-button-cotainer">
+    <button id="openWhiteboard" >📝</button>
+    </div>
 
     <!-- Modal for Whiteboard -->
-    <div id="whiteboardModal" class="modal">
-        <div class="modal-content">
+    <div id="whiteboardModal" class="whiteboard-modal">
+        <div class="whiteboard-content">
             <div id="toolbar">
                 <button id="pencil">✏️</button>
                 <button id="pen">🖊️</button>
@@ -447,8 +380,8 @@
                 <button id="highlight">🟨</button>
                 <button id="clear">🗑️</button>
                 <input type="color" id="colorPicker" value="#000000">
-                <button id="closeWhiteboard">Close</button>
-                <button id="resizeWhiteboard">Resize</button>
+                <button id="closeWhiteboard">❌</button>
+                <button id="resizeWhiteboard">⤢</button>
             </div>
             <div id="whiteboard-container">
                 <div id="canvas-wrapper">

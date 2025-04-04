@@ -1716,3 +1716,104 @@ h2:contains("Team Members") {
     border-style: solid;
     border-color: transparent #f0f0f0 transparent transparent;
 }
+
+
+
+
+        
+#openWhiteboard {
+    width: 50px;
+    height: 50px;
+    background-color: #d59d76;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 50px;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+#openWhiteboard:hover {
+    transform: scale(1.1);
+    background-color: #d46b48;
+}
+
+.whiteboard-modal {
+    display: none;
+    position: fixed;
+    z-index: 100;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.whiteboard-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background-color: white;
+    display: flex;
+    flex-direction: column;
+}
+
+.whiteboard-header {
+    padding: 10px;
+    background: #f1f1f1;
+    position: relative;
+}
+
+#toolbar {
+    width: 60px;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px;
+    box-shadow: 2px 0px 5px rgba(0, 0, 0, 0.2);
+    z-index: 10;
+}
+
+#toolbar button,
+#toolbar #closeWhiteboard,
+#toolbar #resizeWhiteboard {
+    width: 40px;
+    height: 40px;
+    margin: 10px 0;
+    border: none;
+    cursor: pointer;
+    background: lightgray;
+    font-size: 14px;
+    color: black;
+}
+
+
+
+#closeWhiteboard {
+    background: red !important;
+    color: white;
+    width: auto;
+}
+
+
+canvas {
+    position: absolute;
+    top: 0;
+    left: 60px;
+    right: 0;
+    bottom: 0;
+    background: white;
+}
+
+#whiteboard-container {
+    flex: 1;
+    display: flex;
+}
+
+#wb-button-cotainer {
+    position: fixed;
+    top : 30px;
+    right: 150px;
+    z-index: 1000;
+}
+
