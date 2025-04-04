@@ -13,6 +13,68 @@
     <link href="https://fonts.googleapis.com/css2?family=Amiri+Quran&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/project_hub.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+    
+
+    <style>
+        
+        #toolbar {
+            width: 60px;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            box-shadow: 2px 0px 5px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+        #closeWhiteboard {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: red;
+            color: white;
+            border: none;
+            padding: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        #resizeWhiteboard {
+            background: gray;
+            top: 5px;
+            right: 10px;
+            color: white;
+            border: none;
+            padding: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button {
+            width: 40px;
+            height: 40px;
+            margin: 10px;
+            border: none;
+            cursor: pointer;
+            background: lightgray;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 60px; /* Same width as toolbar */
+            right: 0;
+            bottom: 0;
+            background: white;
+        }
+        #whiteboard-container {
+            flex: 1;
+            display: flex;
+        }
+
+        
+        .status-online { color: green; }
+        .status-offline { color: red; }
+    </style>
 </head>
 <body>
     <div class="sidebar">
@@ -370,6 +432,33 @@
   
 
 
+   
+    <button id="openWhiteboard">🖋️ Open Whiteboard</button>
+    <a href="/gantt_chart?project_code={{ project.code }}&user={{ user }}">Go to Gantt Chart</a>
+    <a href="/menu?user={{ user }}">Back to Menu</a>
+
+    <!-- Modal for Whiteboard -->
+    <div id="whiteboardModal" class="modal">
+        <div class="modal-content">
+            <div id="toolbar">
+                <button id="pencil">✏️</button>
+                <button id="pen">🖊️</button>
+                <button id="eraser">🧹</button>
+                <button id="highlight">🟨</button>
+                <button id="clear">🗑️</button>
+                <input type="color" id="colorPicker" value="#000000">
+                <button id="closeWhiteboard">Close</button>
+                <button id="resizeWhiteboard">Resize</button>
+            </div>
+            <div id="whiteboard-container">
+                <div id="canvas-wrapper">
+                    <canvas id="whiteboard"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PyScript for ProjectHub + Whiteboard Modal -->
     <py-script>
         import asyncio
         import json
@@ -2707,6 +2796,175 @@
 
 
 
+        
+
+
+        # --- WhiteboardModal Class for Collaborative Whiteboard ---
+        class WhiteboardModal:
+            """Manage the collaborative whiteboard modal and drawing tools."""
+            def __init__(self, project_code, username):
+                self.project_code = project_code
+                self.username = username
+                self.ws = None
+                self.canvas = document.getElementById("whiteboard")
+                self.ctx = self.canvas.getContext("2d")
+                self.drawing = False
+                self.tool = "pen"
+                self.color_picker = document.getElementById("colorPicker")
+
+            async def connect_websocket(self):
+                """Connect WebSocket for whiteboard synchronization."""
+                protocol = "wss" if window.location.protocol == "https:" else "ws"
+                ws_url = f"{protocol}://{window.location.host}/ws/whiteboard/{self.project_code}"
+                self.ws = WebSocket.new(ws_url)
+                self.ws.addEventListener("message", create_proxy(self.handle_message))
+
+            def handle_message(self, event):
+                """Render strokes from WebSocket messages."""
+                data = json.loads(event.data)
+                if data.get("action") == "clear":
+                    self.ctx.clearRect(0, 0, self.canvas.width, self.canvas.height)
+                elif data.get("action") == "start":
+                    # Begin a new path when a new stroke is started.
+                    self.ctx.beginPath()
+                    self.ctx.moveTo(data["x"], data["y"])
+                else:
+                    # Continue drawing the stroke.
+                    self.ctx.strokeStyle = data.get("color", "black")
+                    self.ctx.lineWidth = data.get("lineWidth", 2)
+                    self.ctx.lineTo(data["x"], data["y"])
+                    self.ctx.stroke()
+            
+
+            def render_strokes(self, strokes):
+                """Render previously saved strokes."""
+                for stroke in strokes:
+                    if stroke.get("action") == "start":
+                        self.ctx.beginPath()
+                        self.ctx.moveTo(stroke["x"], stroke["y"])
+                    else:
+                        self.ctx.strokeStyle = stroke.get("color", "black")
+                        self.ctx.lineWidth = stroke.get("lineWidth", 2)
+                        self.ctx.lineTo(stroke["x"], stroke["y"])
+                        self.ctx.stroke()
+
+            def resize_canvas(self):
+                """Resize the canvas to fit the modal."""
+                self.canvas.width = window.innerWidth * 1
+                self.canvas.height = window.innerHeight * 1
+
+            def start_draw(self, event):
+                """Start a drawing path."""
+                self.drawing = True
+                self.ctx.beginPath()
+                self.ctx.moveTo(event.offsetX, event.offsetY)
+                self.ws.send(json.dumps({"action": "start", "x": event.offsetX, "y": event.offsetY}))
+
+            def draw(self, event):
+                """Continue drawing and broadcast updates."""
+                if not self.drawing:
+                    return
+                self.ctx.lineTo(event.offsetX, event.offsetY)
+                self.ctx.stroke()
+                self.ws.send(json.dumps({
+                    "x": event.offsetX, "y": event.offsetY,
+                    "color": self.color_picker.value if self.tool != "eraser" else "white",
+                    "lineWidth": self.ctx.lineWidth
+                }))
+
+            def stop_draw(self, event):
+                """Stop drawing path."""
+                self.drawing = False
+
+            def clear_canvas(self, event):
+                """Clear the canvas for all users."""
+                self.ctx.clearRect(0, 0, self.canvas.width, self.canvas.height)
+                self.ws.send(json.dumps({"action": "clear"}))
+
+            def set_tool(self, tool_type, color="black", width=2, alpha=1):
+                """Configure the drawing tool."""
+                self.tool = tool_type
+                self.ctx.strokeStyle = color
+                self.ctx.lineWidth = width
+                self.ctx.globalAlpha = alpha
+            
+            def resize_modal(self, event=None):
+                """Toggle between full-screen and bottom-right minimized modal."""
+                modal = document.getElementById("whiteboardModal")
+                content = document.querySelector(".modal-content")
+            
+                if not hasattr(self, 'modal_state'):
+                    self.modal_state = "normal"
+            
+                if self.modal_state == "normal":
+                    # Move and scale to bottom-right corner
+                    modal.style.width = f"{window.innerWidth}px"
+                    modal.style.height = f"{window.innerHeight}px"
+                    modal.style.left = "auto"
+                    modal.style.top = "auto"
+                    modal.style.right = "0"
+                    modal.style.bottom = "0"
+                    modal.style.backgroundColor = "rgba(0, 0, 0, 0.5)"
+                    modal.style.transform = "scale(0.5)"
+                    modal.style.transformOrigin = "bottom right"
+            
+                    self.modal_state = "lower"
+                else:
+                    # Restore to full-screen mode
+                    modal.style.width = "100%"
+                    modal.style.height = "100%"
+                    modal.style.left = "0"
+                    modal.style.top = "0"
+                    modal.style.right = "auto"
+                    modal.style.bottom = "auto"
+                    modal.style.backgroundColor = "rgba(0, 0, 0, 0.8)"
+                    modal.style.transform = "scale(1)"
+                    modal.style.transformOrigin = "center"
+            
+                    self.modal_state = "normal"
+            
+                console.log(f"Toggled modal size to {self.modal_state}")
+            
+            
+
+            def add_event_listeners(self):
+                """Configure tool and canvas event listeners."""
+                self.canvas.addEventListener("mousedown", create_proxy(self.start_draw))
+                self.canvas.addEventListener("mousemove", create_proxy(self.draw))
+                self.canvas.addEventListener("mouseup", create_proxy(self.stop_draw))
+                self.canvas.addEventListener("mouseleave", create_proxy(self.stop_draw))
+                document.getElementById("pencil").addEventListener("click", create_proxy(lambda e: self.set_tool("pencil", "black", 0.5)))
+                document.getElementById("pen").addEventListener("click", create_proxy(lambda e: self.set_tool("pen", self.color_picker.value, 2)))
+                document.getElementById("eraser").addEventListener("click", create_proxy(lambda e: self.set_tool("eraser", "white", 10)))
+                document.getElementById("highlight").addEventListener("click", create_proxy(lambda e: self.set_tool("highlight", self.color_picker.value, 10, 0.08)))
+                document.getElementById("clear").addEventListener("click", create_proxy(self.clear_canvas))
+                document.getElementById("resizeWhiteboard").addEventListener("click", create_proxy(self.resize_modal))
+
+
+
+
+        # Whiteboard modal handling
+        whiteboard_modal = WhiteboardModal(project_code, username)
+        modal_whiteboard = document.getElementById("whiteboardModal")
+        open_btn_whiteboard = document.getElementById("openWhiteboard")
+        close_btn_whiteboard = document.getElementById("closeWhiteboard")
+
+        open_btn_whiteboard.addEventListener("click", create_proxy(lambda e: (
+            setattr(whiteboard_modal, 'modal_state', 'normal'),
+            modal_whiteboard.style.setProperty("display", "block"),
+            modal_whiteboard.style.setProperty("width", "100%"),
+            modal_whiteboard.style.setProperty("height", "100%"),
+            modal_whiteboard.style.setProperty("left", "0"),
+            modal_whiteboard.style.setProperty("top", "0"),
+            modal_whiteboard.style.setProperty("right", "auto"),
+            modal_whiteboard.style.setProperty("bottom", "auto"),
+            modal_whiteboard.style.setProperty("background-color", "rgba(0, 0, 0, 0.8)"),
+            modal_whiteboard.style.setProperty("transform", "scale(1)"),
+            whiteboard_modal.resize_canvas(),
+            asyncio.ensure_future(whiteboard_modal.connect_websocket()),
+            whiteboard_modal.add_event_listeners()
+        )))
+        close_btn_whiteboard.addEventListener("click", create_proxy(lambda e: modal_whiteboard.style.setProperty("display", "none")))
     </py-script>
 
 
