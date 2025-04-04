@@ -57,8 +57,46 @@ class Project(Persistent):
         self.gantt_chart = []  # List to store Gantt chart activities
         self.chats = []  # Store chat objects
         self.tasks = PersistentMapping()
-       
+        self.postit_notes = PersistentList() 
         self.create_general_chat()
+
+    def add_postit_note(self, content, x, y, color=None):
+        if not hasattr(self, "postit_notes"):
+            self.postit_notes = PersistentList()
+
+        if not color:
+            import random
+            color = random.choice(["#a1eafb", "#fffd82", "#ffa69e", "#b8f2e6", "#ff9f1c", "#c7ceea"])
+
+        note = {
+            "id": str(uuid.uuid4()),
+            "content": content,
+            "x": x,
+            "y": y,
+            "color": color
+        }
+        self.postit_notes.append(note)
+        self._p_changed = True
+        transaction.commit()
+        return note
+
+
+
+    def update_postit_position(self, note_id, x, y):
+        for note in self.postit_notes:
+            if note["id"] == note_id:
+                note["x"] = x
+                note["y"] = y
+                self._p_changed = True
+                transaction.commit()
+                break
+
+    def delete_postit_note(self, note_id):
+        self.postit_notes = PersistentList(
+            [note for note in self.postit_notes if note["id"] != note_id]
+        )
+        self._p_changed = True
+        transaction.commit()
 
     def create_general_chat(self):
         """Ensure a default general chat exists."""
@@ -121,6 +159,11 @@ class Project(Persistent):
 
     def calculate_status_and_days_remaining(self):
         gantt_chart = getattr(self, "gantt_chart", [])
+        
+        # If the Gantt chart is empty, set status to "Ongoing" by default
+        if not gantt_chart:
+            return "Ongoing", None
+        
         terminal_tasks = self.get_terminal_tasks()
         today = datetime.today()
 
@@ -159,8 +202,8 @@ class Project(Persistent):
                             if completed < required:
                                 all_terminal_completed = False
                                 break
-                if not all_terminal_completed:
-                    break
+                    if not all_terminal_completed:
+                        break
 
         if all_terminal_completed:
             return "Completed", (latest_end_date - today).days if latest_end_date else None
@@ -168,6 +211,7 @@ class Project(Persistent):
             return "Overdue", (latest_end_date - today).days
         else:
             return "Ongoing", (latest_end_date - today).days if latest_end_date else None
+
 
 
 # --------- DATABASE CLASS ---------

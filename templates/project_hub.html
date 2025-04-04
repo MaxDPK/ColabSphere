@@ -51,9 +51,18 @@
     
     <div class="main-content">
         <!-- Add Settings Button -->
-        <button id="settings-btn" class="settings-btn">
-            <i class="fas fa-cog">⚙️</i>
-        </button>
+       <div class="main-content">
+    <div class="bottom-right-controls">
+        <a href="/project_whiteboard/{{ project.code }}?user={{ user }}" class="circle-btn tooltip" data-tooltip="Whiteboard">📝</a>
+        <a href="/gantt_chart?project_code={{ project.code }}&user={{ user }}" class="circle-btn tooltip" data-tooltip="Gantt Chart">📊</a>
+        <a href="/menu?user={{ user }}" class="circle-btn tooltip" data-tooltip="Back to Menu">↩️</a>
+        <button id="settings-btn" class="circle-btn tooltip" data-tooltip="Project Settings">⚙️</button>
+    </div>
+</div>
+
+        
+        
+        
         
         
 
@@ -91,15 +100,6 @@
             </ul>
             </div>
 
-            <!-- Project Actions Section -->
-            <div class="settings-section">
-            <h3>Project Actions</h3>
-            <div class="action-buttons">
-                <button class="action-btn invite-btn">Invite Team Member</button>
-                <button class="action-btn export-btn">Export Project Data</button>
-                <button class="action-btn leave-btn">Leave Project</button>
-            </div>
-            </div>
         </div>
         </div>
 
@@ -111,6 +111,8 @@
             </div>
           </div>
         
+        
+    
         
     </div>
 
@@ -283,14 +285,13 @@
     </div>
 
 
-    <!-- Add task section icon -->
-    <div id="task-section-icon" class="task-section-icon">📋</div>
+  
 
     <!-- Task Section -->
-    <div class="task-section" style="display: none;">
+    <div class="task-section">
         <div class="task-section-header">
             <h2>My Assigned Tasks</h2>
-            <button class="pin-task-section">📌</button>
+            
         </div>
         <ul id="assigned-tasks">
             {% set row_to_task = {} %}
@@ -318,15 +319,18 @@
         
                     <!-- Progress Bar Container -->
                     <div class="progress-container">
-                        <div id="progress-{{ task['name'].replace(' ', '-') }}" class="progress-bar"
-                            style="width: {{ (task.get('completed_seconds', 0) / (task.get('hours_to_complete', 1) * 3600)) * 100 }}%;"
-                            data-total-hours="{{ task['hours_to_complete'] }}"
-                            data-completed-seconds="{{ task.get('completed_seconds', 0) }}">
+                        <div class="progress-bar-wrapper">
+                            <div id="progress-{{ task['name'].replace(' ', '-') }}" class="progress-bar"
+                                style="width: {{ (task.get('completed_seconds', 0) / (task.get('hours_to_complete', 1) * 3600)) * 100 }}%;"
+                                data-total-hours="{{ task['hours_to_complete'] }}"
+                                data-completed-seconds="{{ task.get('completed_seconds', 0) }}">
+                            </div>
                         </div>
                         <span id="progress-text-{{ task['name'].replace(' ', '-') }}" class="progress-text">
                             {{ ((task.get('completed_seconds', 0) / (task.get('hours_to_complete', 1) * 3600)) * 100) | round(1) }}%
                         </span>
                     </div>
+                    
         
                     {% if (task.get('completed_seconds', 0) / (task.get('hours_to_complete', 1) * 3600)) >= 1 %}
                         <p class="completed-text">✅ Task Completed</p>
@@ -2391,7 +2395,7 @@
     
    
 
-        # here
+        
         def init_settings_modal():
             settings_btn = document.getElementById('settings-btn')
             settings_modal = document.getElementById('settings-modal')
@@ -2399,83 +2403,37 @@
             copy_project_code_btn = document.getElementById('copy-project-code')
             close_modal_btn = document.querySelector('.close-modal-btn')
             modal_content = settings_modal.querySelector('.modal-content')
-            leave_btn = document.querySelector('.leave-btn')
-
+        
             # ✅ Retrieve project code safely
             project_code_el = document.getElementById('project-code')
             if not project_code_el or not project_code_el.textContent:
                 console.error("❌ Project code is empty or not loaded.")
                 return
             project_code = project_code_el.textContent.strip()
-            # ✅ Other Action Buttons
-            def handle_invite(event):
-                window.alert('Invite functionality will be implemented soon!')
-
-            def handle_export(event):
-                window.alert('Export functionality will be implemented soon!')
-
-            def handle_leave(event):
-                console.log("🟥 Leave button clicked!")
-                if window.confirm("Are you sure you want to leave this project?"):
-                    # Send POST request to /leave_project
-                    async def send_leave_request():
-                        form_data = FormData.new()
-                        form_data.append("project_code", project_code)  # already defined earlier
-                        form_data.append("user", user)  # you should set this variable on load
-
-                        try:
-                            response = await fetch("/leave_project", {
-                                "method": "POST",
-                                "body": form_data
-                            })
-                            if response.ok:
-                                window.alert("You have left the project.")
-                                window.location.href = f"/menu?user={user}"
-                            else:
-                                error = await response.json()
-                                window.alert(f"❌ Failed to leave project: {error.get('error', 'Unknown error')}")
-                        except Exception as e:
-                            window.alert(f"❌ Network error: {str(e)}")
-
-                    asyncio.create_task(send_leave_request())
-
-
-            if leave_btn:
-                leave_btn.addEventListener('click', create_proxy(handle_leave))
-                console.log("🟢 Leave button listener added")
-            else:
-                console.error("❌ Leave button not found")
-
+        
             # ✅ Modal Open/Close Functions
             def open_modal(event):
                 overlay.style.display = 'block'
                 settings_modal.style.display = 'block'
                 document.body.style.overflow = 'hidden'
-
+        
             def close_modal(event):
                 overlay.style.display = 'none'
                 settings_modal.style.display = 'none'
                 document.body.style.overflow = 'auto'
-
+        
             def stop_propagation(event):
                 event.stopPropagation()
-
-            # ✅ Add Event Listeners
+        
             if settings_btn:
                 settings_btn.addEventListener("click", create_proxy(open_modal))
-                console.log('✅ Settings button listener added')
-            else:
-                console.error('❌ Settings button not found')
-
             if close_modal_btn:
                 close_modal_btn.addEventListener("click", create_proxy(close_modal))
-
             if overlay:
                 overlay.addEventListener("click", create_proxy(close_modal))
-
             if modal_content:
                 modal_content.addEventListener("click", create_proxy(stop_propagation))
-
+        
             # ✅ Clipboard Copy Function
             async def copy_project_code(event):
                 try:
@@ -2483,18 +2441,17 @@
                     show_copied_message()
                 except Exception as e:
                     console.error("❌ Copy failed:", str(e))
-
+        
             def show_copied_message():
                 original_text = copy_project_code_btn.textContent
                 copy_project_code_btn.textContent = 'Copied!'
                 def reset_text():
                     copy_project_code_btn.textContent = original_text
                 window.setTimeout(create_proxy(reset_text), 2000)
-
+        
             if copy_project_code_btn:
                 copy_project_code_btn.addEventListener("click", create_proxy(lambda e: asyncio.create_task(copy_project_code(e))))
-
-
+        
         def open_gantt_task_modal(task, click_x=None, click_y=None):
             from js import document
         
