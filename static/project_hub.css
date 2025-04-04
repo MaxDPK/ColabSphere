@@ -1954,3 +1954,18 @@ canvas {
     right: 150px;
     z-index: 1000;
 }
+
+#toggle-camera, #toggle-mic, #toggle-deafen, #toggle-screen {
+    padding: 8px 12px;
+    margin-right: 10px;
+    font-size: 14px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #dec5a3;
+    color: black;
+}
+
+#toggle-camera:hover, #toggle-mic:hover, #toggle-deafen:hover, #toggle-screen:hover {
+    background-color: #D9B08C;
+}

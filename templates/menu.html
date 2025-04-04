@@ -10,7 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 </head>
-<body data-project-code="{{ project.code if project and project.code else '' }}">
+<body>
+
 
     <!-- Left Sidebar -->
     <div class="sidebar">
@@ -120,7 +121,7 @@
                     <!-- 👇 Move this outside the status-bar to appear underneath -->
                     <div class="progress-wrapper" style="margin-top: 8px;">
                         <div class="progress-bar">
-                            <div class="progress-fill" style="width: {{ project.overall_progress }}%;"></div>
+                            <div class="progress-fill" style="width: {{ project.overall_progress }}%"></div>
                         </div>
                         <span class="progress-text">{{ project.overall_progress }}%</span>
                     </div>
@@ -128,11 +129,11 @@
             {% endfor %}
 
            
-            <div id="notes-area" style="position:absolute; top:100px; right:50px; width:400px; height:600px;">
-                <div id="postit-container" style="position:relative; width:100%; height:100%;"></div>
+            <div id="notes-area" style="position:absolute; top:100px; right:50px; width:400px; height:600px; border:1px dashed rgba(0,0,0,0.1); background-color: #e6d6c1;; z-index:50;">
+                <div id="postit-container" style="position:relative; width:100%; height:100%; overflow:visible;"></div>
             </div>
         
-            <button id="add-note-btn" style="position:absolute; top:80px; right:60px; font-size:30px; background:none; border:none; color:#c24f35; cursor:pointer;">+</button>
+            <button id="add-note-btn" style="position:absolute; top:80px; right:60px; font-size:30px; background:none; border:none; color:#c24f35; cursor:pointer; z-index:51;">+</button>
         
 
         </div>
@@ -287,26 +288,82 @@
         # List of possible colors for notes
         colors = ["#a1eafb", "#fffd82", "#ffa69e", "#b8f2e6", "#ff9f1c", "#c7ceea"]
 
+        # Function to load the notes for the user
         async def load_notes():
-            """Load notes for the project from the backend."""
-            project_code = document.body.getAttribute("data-project-code")
-            res = await pyfetch(f"/project_notes/{project_code}")
-            notes = (await res.json())["notes"]
-            container = document.getElementById("postit-container")
-            container.innerHTML = ""  # Clear the container before loading new notes
-            for note in notes:
-                render_note(note, container)
+            user = document.querySelector(".username").textContent.strip()  # Get the logged-in user
+            console.log(f"Loading notes for user: {user}")
+            
+            if not user:
+                console.error("User not found!")
+                return
+            
+            try:
+                console.log(f"Fetching notes from endpoint: /user_notes/{user}")
+                res = await pyfetch(f"/user_notes/{user}")
+                
+                if not res.ok:
+                    console.error(f"Server returned error: {res.status} {res.statusText}")
+                    return
+                    
+                data = await res.json()
+                console.log(f"Notes data received: {data}")
+                
+                # Clear the container first
+                container = document.getElementById("postit-container")
+                if not container:
+                    console.error("Could not find postit-container element")
+                    return
+                
+                container.innerHTML = ""
+                
+                # Check if we have notes in the response
+                if not data.get("success", True):
+                    console.error(f"Error from server: {data.get('message', 'Unknown error')}")
+                    return
+                
+                notes = data.get("notes", [])
+                console.log(f"Found {len(notes)} notes to display")
+                
+                if not notes:
+                    console.log("No notes found for this user")
+                    return
+                    
+                # Render the notes
+                for note in notes:
+                    console.log(f"Rendering note: {note.get('id', 'unknown-id')}")
+                    render_note(note, container)
+                    
+            except Exception as e:
+                console.error(f"Error loading notes: {e}")
+                console.log(f"Error type: {type(e).__name__}")
+                import traceback
+                console.log(traceback.format_exc())
 
+
+        # Function to render a note on the screen
         def render_note(note, container):
+            console.log(f"Rendering note: {note}")
+            
+            # Make sure we have a valid note object with required fields
+            if not isinstance(note, dict):
+                console.error(f"Invalid note object: {note}")
+                return
+                
+            if "id" not in note:
+                console.error("Note is missing ID, generating a random one")
+                note["id"] = str(uuid.uuid4())
+                
             color = note.get("color", random.choice(colors))
+            x = note.get("x", 20)
+            y = note.get("y", 20)
 
             div = document.createElement("div")
             div.className = "postit"
-            div.style.left = f"{note['x']}px"
-            div.style.top = f"{note['y']}px"
+            div.style.left = f"{x}px"
+            div.style.top = f"{y}px"
+            div.style.backgroundColor = color
             div.style.width = "150px"
             div.style.height = "150px"
-            div.style.backgroundColor = color
             div.style.padding = "10px"
             div.style.boxShadow = "0 3px 6px rgba(0,0,0,0.2)"
             div.style.position = "absolute"
@@ -314,15 +371,18 @@
             div.style.borderRadius = "8px"
             div.style.display = "flex"
             div.style.flexDirection = "column"
+            div.style.zIndex = "100"  # Ensure note appears on top
 
             div.id = note["id"]
             div.innerHTML = f'''
                 <span class="delete-note" style="align-self:flex-end;cursor:pointer;">✖️</span>
-                <div contenteditable style="flex:1; overflow:auto; font-family:'Inter', sans-serif;">{note["content"]}</div>
+                <div contenteditable style="flex:1; overflow:auto; font-family:'Inter', sans-serif;">{note.get("content", "New note")}</div>
             '''
+            
+            console.log(f"Adding note to container with ID: {div.id}")
             container.appendChild(div)
 
-            # Listen for content edits without using async lambda
+            # Listen for content edits
             def on_content_edit(e):
                 note_id = div.id
                 new_content = e.target.innerText
@@ -351,11 +411,11 @@
                 if dragging:
                     dragging = False
                     x, y = div.offsetLeft, div.offsetTop
-                    project_code = document.body.getAttribute("data-project-code")
-                    
+                    user = document.querySelector(".username").textContent.strip()
+
                     # Ensure the x and y values are correctly included in the request
                     await pyfetch(
-                        f"/project_notes/{project_code}/update",
+                        f"/user_notes/{user}/update",
                         method="POST",
                         body=json.dumps({"id": div.id, "x": x, "y": y}),
                         headers={"Content-Type": "application/json"}
@@ -363,9 +423,9 @@
 
             async def delete_note(e):
                 container.removeChild(div)
-                project_code = document.body.getAttribute("data-project-code")
+                user = document.querySelector(".username").textContent.strip()
                 await pyfetch(
-                    f"/project_notes/{project_code}/delete",
+                    f"/user_notes/{user}/delete",
                     method="POST",
                     body=json.dumps({"id": div.id}),
                     headers={"Content-Type": "application/json"}
@@ -378,35 +438,88 @@
 
         # Function to update note content
         async def update_note_content(note_id, new_content):
-            project_code = document.body.getAttribute("data-project-code")
-            await pyfetch(
-                f"/project_notes/{project_code}/update",
-                method="POST",
-                body=json.dumps({"id": note_id, "content": new_content}),
-                headers={"Content-Type": "application/json"}
-            )
-        
-        async def add_note(e):
-            """Add a new note to the project."""
-            project_code = document.body.getAttribute("data-project-code")
-            res = await pyfetch(
-                f"/project_notes/{project_code}/add",
-                method="POST",
-                body=json.dumps({"content": "New note", "x": 20, "y": 20}),
-                headers={"Content-Type": "application/json"}
-            )
-            data = await res.json()
-            if data["success"]:
-                container = document.getElementById("postit-container")
-                render_note(data["note"], container)
+            user = document.querySelector(".username").textContent.strip()
+            console.log(f"Updating content for note {note_id} to: {new_content}")
+            try:
+                res = await pyfetch(
+                    f"/user_notes/{user}/update",
+                    method="POST",
+                    body=json.dumps({"id": note_id, "content": new_content}),
+                    headers={"Content-Type": "application/json"}
+                )
+                data = await res.json()
+                if not data.get("success", False):
+                    console.error(f"Error updating note content: {data.get('message', 'Unknown error')}")
+            except Exception as e:
+                console.error(f"Error updating note content: {e}")
+                console.log(f"Error type: {type(e).__name__}")
+                import traceback
+                console.log(traceback.format_exc())
 
+        async def add_note(event):
+            """Add a new note to the user."""
+            user = document.querySelector(".username").textContent.strip()  # Get the logged-in user
+            console.log("Add note triggered");
+        
+            if not user:
+                console.error("User is missing!")
+                return  # Prevent function from continuing if user is missing
+            
+            try:
+            
+                note_data = {
+                    "content": "New note",
+                    "x": 20,
+                    "y": 20,
+                    "color": random.choice(colors)  # Use the colors list defined above
+                }
+
+                console.log("Sending request to server...");
+        
+                res = await pyfetch(
+                    f"/user_notes/{user}/add",  # Only use the user, no project_code
+                    method="POST",
+                    body=json.dumps(note_data),
+                    headers={"Content-Type": "application/json"}
+                )
+
+                
+                data = await res.json()
+                console.log("Response received:", data);
+        
+                if data.get("success"):
+                    container = document.getElementById("postit-container")
+                    # Handle the case where the response directly includes the new note
+                    if "note" in data:
+                        new_note = data["note"]
+                        console.log("Displaying new note:", new_note)
+                        render_note(new_note, container)
+                    # Or handle the case where it returns all notes
+                    elif "notes" in data:
+                        # Find the most recently added note (should be the last one)
+                        if len(data["notes"]) > 0:
+                            new_note = data["notes"][-1]
+                            console.log("Displaying new note from notes list:", new_note)
+                            render_note(new_note, container)
+                    else:
+                        console.error("No note data found in response")
+                else:
+                    console.error("Failed to add note:", data.get("message", "No error message"))
+            except Exception as e:
+                console.error(f"Error adding note: {e}")
+                # Print more details about the error
+                console.log(f"Error type: {type(e).__name__}")
+                console.log(f"Error details: {str(e)}")
+                import traceback
+                console.log(traceback.format_exc())
+        
+        
+        
         # Add event listener to the button for adding new notes
         document.getElementById("add-note-btn").addEventListener("click", create_proxy(add_note))
 
         # Load notes when the page is first loaded
         asyncio.ensure_future(load_notes())
-                    
-                
 
     </py-script>
 
