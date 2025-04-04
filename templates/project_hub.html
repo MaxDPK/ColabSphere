@@ -66,6 +66,101 @@
         background-color: #D9B08C;
         }
 
+        .whiteboard-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        .whiteboard-content {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: white;
+            display: flex;
+        }
+
+        #toolbar {
+            width: 70px;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            border-radius: 12px;
+            gap: 12px;
+        }
+
+        .tool-button {
+            width: 48px;
+            height: 48px;
+            border: none;
+            cursor: pointer;
+            background: white;
+            border-radius: 8px;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .tool-button:hover {
+            background: #f0f5ff;
+            transform: translateY(-2px);
+        }
+
+        .tool-button.active {
+            background: #e6efff;
+            box-shadow: inset 0 0 0 2px #4a86e8;
+        }
+
+        #colorPicker {
+            width: 48px;
+            height: 48px;
+            border: none;
+            cursor: pointer;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.2s ease;
+            padding: 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .divider {
+            width: 40px;
+            height: 1px;
+            background: #e0e0e0;
+            margin: 4px 0;
+        }
+
+        #whiteboard-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #whiteboard {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
     </style>
    
 </head>
@@ -80,9 +175,9 @@
         <div class="channel-section" id="channel-list" style="display: none;">  
             <button class="add-channel">+ Add channel</button>
         </div> 
-        <!-- ✅ Today’s Tasks Section -->
+        <!-- ✅ Today's Tasks Section -->
         <div id="todays-tasks-section">
-            <h2 class="todays-task-heading">Today’s Tasks</h2>
+            <h2 class="todays-task-heading">Today's Tasks</h2>
 
             <ul id="todays-task-list" class="task-list-ui"></ul>
         </div>
@@ -96,13 +191,13 @@
             </ul>
         </div>
 
-        
-        <div>
-            <h2>Stream</h2>
-            <button id="toggle-camera">📷 Turn Off Camera</button>
-            <button id="toggle-mic">🎤 Mute Mic</button>
-            <button id="toggle-screen">🖥️ Share Screen</button>
-
+        <!-- Stream Controls -->
+        <div class="stream-controls">
+            <div class="stream-controls-inner">
+                <button  id="toggle-camera" >📷</button>
+                <button id="toggle-mic" >🎤</button>
+                <button id="toggle-screen" ">🖥️</button>
+            </div>
         </div>
 
         
@@ -114,7 +209,7 @@
         <!-- Add Settings Button -->
        <div class="main-content">
     <div class="bottom-right-controls">
-        <a href="/project_whiteboard/{{ project.code }}?user={{ user }}" class="circle-btn tooltip" data-tooltip="Whiteboard">📝</a>
+        <button id="openWhiteboard" class="circle-btn tooltip" data-tooltip="Whiteboard">📝</button>
         <a href="/gantt_chart?project_code={{ project.code }}&user={{ user }}" class="circle-btn tooltip" data-tooltip="Gantt Chart">📊</a>
         <a href="/menu?user={{ user }}" class="circle-btn tooltip" data-tooltip="Back to Menu">↩️</a>
         <button id="settings-btn" class="circle-btn tooltip" data-tooltip="Project Settings">⚙️</button>
@@ -445,27 +540,23 @@
   
     
     
-    <div id= "wb-button-cotainer">
-    <button id="openWhiteboard" >📝</button>
-    </div>
+   
 
-    <!-- Modal for Whiteboard -->
+    <!-- Whiteboard Modal -->
     <div id="whiteboardModal" class="whiteboard-modal">
         <div class="whiteboard-content">
             <div id="toolbar">
-                <button id="pencil">✏️</button>
-                <button id="pen">🖊️</button>
-                <button id="eraser">🧹</button>
-                <button id="highlight">🟨</button>
-                <button id="clear">🗑️</button>
-                <input type="color" id="colorPicker" value="#000000">
-                <button id="closeWhiteboard">❌</button>
-                <button id="resizeWhiteboard">⤢</button>
+                <button id="pencil" class="tool-button tooltip" data-tooltip="Pencil">✏️</button>
+                <button id="pen" class="tool-button tooltip" data-tooltip="Pen">🖊️</button>
+                <button id="eraser" class="tool-button tooltip" data-tooltip="Eraser">🧹</button>
+                <button id="highlight" class="tool-button tooltip" data-tooltip="Highlight">🟨</button>
+                <button id="clear" class="tool-button tooltip" data-tooltip="Clear All">🗑️</button>
+                <input type="color" id="colorPicker" value="#000000" class="tooltip" data-tooltip="Color">
+                <button id="closeWhiteboard" class="tool-button tooltip" data-tooltip="Close">❌</button>
+                <button id="resizeWhiteboard" class="tool-button tooltip" data-tooltip="Resize">⤢</button>
             </div>
             <div id="whiteboard-container">
-                <div id="canvas-wrapper">
-                    <canvas id="whiteboard"></canvas>
-                </div>
+                <canvas id="whiteboard"></canvas>
             </div>
         </div>
     </div>
@@ -2835,7 +2926,7 @@
             if click_y is None:
                 click_y = window.innerHeight / 2
 
-            # ✅ Make sure it doesn’t go off screen
+            # ✅ Make sure it doesn't go off screen
             max_x = window.innerWidth - 360
             max_y = window.innerHeight - 250
 
@@ -3208,9 +3299,17 @@
         async function initMedia() {
           try {
             localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            // Disable camera and mic by default
+            localStream.getVideoTracks().forEach(track => track.enabled = false);
+            localStream.getAudioTracks().forEach(track => track.enabled = false);
             localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
             updateCamZone(localStream, username);
-            updateMicIcon(username, micEnabled);
+            updateMicIcon(username, false);
+            // Update button states
+            document.getElementById("toggle-camera").textContent = "📵";
+            document.getElementById("toggle-mic").textContent = "🔇";
+            cameraEnabled = false;
+            micEnabled = false;
           } catch (err) {
             console.error("Media error:", err);
           }
@@ -3250,7 +3349,7 @@
           if (!localStream) return;
           cameraEnabled = !cameraEnabled;
           localStream.getVideoTracks().forEach(track => track.enabled = cameraEnabled);
-          document.getElementById("toggle-camera").textContent = cameraEnabled ? "📷 Turn Off Camera" : "📷 Turn On Camera";
+          document.getElementById("toggle-camera").textContent = cameraEnabled ? "📷" : "📵";
           const camBox = document.getElementById(`cam-box-${username}`);
           if (camBox) camBox.remove();
           if (cameraEnabled) {
@@ -3264,7 +3363,7 @@
           if (!localStream) return;
           micEnabled = !micEnabled;
           localStream.getAudioTracks().forEach(track => track.enabled = micEnabled);
-          document.getElementById("toggle-mic").textContent = micEnabled ? "🎤 Mute Mic" : "🔇 Unmute Mic";
+          document.getElementById("toggle-mic").textContent = micEnabled ? "🎤" : "🔇";
           updateMicIcon(username, micEnabled);
           sendSignal({ type: "mic-toggle", username, enabled: micEnabled });
         };
