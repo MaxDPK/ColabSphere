@@ -1304,3 +1304,62 @@ async def upload_file(
             content={"success": False, "error": str(e)},
             status_code=500
         )
+    
+
+@app.get("/project_notes/{project_code}")
+async def get_notes(project_code: str):
+    project = db.get_project(project_code)
+    if not project:
+        return {"notes": []}
+
+    if not hasattr(project, 'postit_notes'):
+        project.postit_notes = PersistentList()
+        transaction.commit()
+
+    return {"notes": list(project.postit_notes)}
+
+@app.post("/project_notes/{project_code}/add")
+async def add_note(project_code: str, data: dict = Body(...)):
+    project = db.get_project(project_code)
+    if not project:
+        return {"success": False}
+
+    note = project.add_postit_note(data["content"], data["x"], data["y"], data.get("color"))
+    return {"success": True, "note": note}
+
+@app.post("/project_notes/{project_code}/update")
+async def update_note_content(project_code: str, data: dict = Body(...)):
+    project = db.get_project(project_code)
+    if not project:
+        return {"success": False, "message": "Project not found"}
+
+    try:
+        note_id = data["id"]
+        new_content = data["content"]  # The updated content from the frontend
+        
+        # Find the note and update its content
+        note = next((note for note in project.postit_notes if note["id"] == note_id), None)
+        if note:
+            note["content"] = new_content  # Update content
+            project._p_changed = True
+            transaction.commit()
+            return {"success": True, "message": "Note updated successfully"}
+        else:
+            return {"success": False, "message": "Note not found"}
+    
+    except KeyError as e:
+        return {"success": False, "message": f"Missing key: {str(e)}"}
+
+
+@app.post("/project_notes/{project_code}/delete")
+async def delete_note(project_code: str, data: dict = Body(...)):
+    project = db.get_project(project_code)
+    if not project:
+        return {"success": False}
+
+    if not hasattr(project, 'postit_notes'):
+        project.postit_notes = PersistentList()
+        transaction.commit()
+
+    project.delete_postit_note(data["id"])
+    return {"success": True}

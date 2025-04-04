@@ -57,8 +57,46 @@ class Project(Persistent):
         self.gantt_chart = []  # List to store Gantt chart activities
         self.chats = []  # Store chat objects
         self.tasks = PersistentMapping()
-       
+        self.postit_notes = PersistentList() 
         self.create_general_chat()
+
+    def add_postit_note(self, content, x, y, color=None):
+        if not hasattr(self, "postit_notes"):
+            self.postit_notes = PersistentList()
+
+        if not color:
+            import random
+            color = random.choice(["#a1eafb", "#fffd82", "#ffa69e", "#b8f2e6", "#ff9f1c", "#c7ceea"])
+
+        note = {
+            "id": str(uuid.uuid4()),
+            "content": content,
+            "x": x,
+            "y": y,
+            "color": color
+        }
+        self.postit_notes.append(note)
+        self._p_changed = True
+        transaction.commit()
+        return note
+
+
+
+    def update_postit_position(self, note_id, x, y):
+        for note in self.postit_notes:
+            if note["id"] == note_id:
+                note["x"] = x
+                note["y"] = y
+                self._p_changed = True
+                transaction.commit()
+                break
+
+    def delete_postit_note(self, note_id):
+        self.postit_notes = PersistentList(
+            [note for note in self.postit_notes if note["id"] != note_id]
+        )
+        self._p_changed = True
+        transaction.commit()
 
     def create_general_chat(self):
         """Ensure a default general chat exists."""
