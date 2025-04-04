@@ -1649,3 +1649,27 @@ async def delete_note(project_code: str, data: dict = Body(...)):
 
     project.delete_postit_note(data["id"])
     return {"success": True}
+
+
+# Track all WebRTC users globally (or scope this to projects later if you want)
+webrtc_connections: List[tuple[WebSocket, str]] = []
+
+@app.websocket("/ws")
+async def webrtc_websocket(websocket: WebSocket, username: str = Query(...)):
+    await websocket.accept()
+    webrtc_connections.append((websocket, username))
+    print(f"📹 {username} joined WebRTC session")
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            for conn, user in webrtc_connections:
+                if conn != websocket:
+                    await conn.send_text(data)
+    except WebSocketDisconnect:
+        print(f"🔌 {username} left WebRTC session")
+        webrtc_connections[:] = [(conn, user) for conn, user in webrtc_connections if conn != websocket]
+
+        # Notify others
+        for conn, _ in webrtc_connections:
+            await conn.send_text(f'{{"type": "disconnect", "username": "{username}"}}')

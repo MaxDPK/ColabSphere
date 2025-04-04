@@ -14,9 +14,62 @@
     <link rel="stylesheet" href="/static/project_hub.css">
     <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
     
+    <style>
+         /* === WebRTC Cam Zone === */
+         #cam-zone {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-height: 90vh;
+        overflow-y: auto;
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.95);
+        border: 2px solid #ccc;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        z-index: 999;
+        }
 
+        .cam-box {
+        border: 2px solid #ccc;
+        border-radius: 10px;
+        padding: 5px;
+        background: white;
+        width: 160px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        }
+
+        video {
+        width: 140px;
+        height: 100px;
+        background: #ddd;
+        border-radius: 6px;
+        }
+
+        #toggle-camera, #toggle-mic, #toggle-screen {
+        padding: 8px 12px;
+        margin-right: 10px;
+        font-size: 14px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        background: #dec5a3;
+        color: black;
+        }
+
+        #toggle-camera:hover, #toggle-mic:hover, #toggle-screen:hover {
+        background-color: #D9B08C;
+        }
+
+    </style>
    
 </head>
+
 <body>
     <div class="sidebar">
         <div class="project-header">
@@ -44,7 +97,15 @@
         </div>
 
         
-  
+        <div>
+            <h2>Stream</h2>
+            <button id="toggle-camera">📷 Turn Off Camera</button>
+            <button id="toggle-mic">🎤 Mute Mic</button>
+            <button id="toggle-screen">🖥️ Share Screen</button>
+
+        </div>
+
+        
 
        
     </div>
@@ -57,8 +118,11 @@
         <a href="/gantt_chart?project_code={{ project.code }}&user={{ user }}" class="circle-btn tooltip" data-tooltip="Gantt Chart">📊</a>
         <a href="/menu?user={{ user }}" class="circle-btn tooltip" data-tooltip="Back to Menu">↩️</a>
         <button id="settings-btn" class="circle-btn tooltip" data-tooltip="Project Settings">⚙️</button>
+        <div id="cam-zone"></div>
     </div>
 </div>
+
+
 
         
         
@@ -2032,7 +2096,20 @@
                         task_label.textContent = f"Working on: {working_on_map[member]}"
                         seat.appendChild(task_label)
                         console.log(f"Working on: {working_on_map[member]}")
-        
+                    
+
+                    mic_icon = document.createElement("div")
+                    mic_icon.id = f"mic-status-{member}"   # 👈 same ID pattern used in JS
+                    mic_icon.textContent = "🎙️"
+                    mic_icon.style.position = "absolute"
+                    mic_icon.style.bottom = "-8px"
+                    mic_icon.style.right = "-2px"
+                    mic_icon.style.fontSize = "14px"
+                    mic_icon.style.background = "rgba(255, 255, 255, 0.8)"
+                    mic_icon.style.borderRadius = "50%"
+                    mic_icon.style.padding = "2px"
+
+                    profile_pic.appendChild(mic_icon)
                     seating_area.appendChild(seat)
             
             # Make the seating area visible again after everything is ready
@@ -3087,7 +3164,253 @@
         close_btn_whiteboard.addEventListener("click", create_proxy(lambda e: modal_whiteboard.style.setProperty("display", "none")))
     </py-script>
 
-
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const username = urlParams.get('user') || 'user' + Math.floor(Math.random() * 1000);
+        console.log("WebRTC Username:", username);
+        
+        let localStream;
+        let pc;
+        let makingOffer = false;
+        let ignoreOffer = false;
+        const polite = true;
+        
+        let cameraEnabled = true;
+        let micEnabled = true;
+        let screenSharing = false;
+        let screenTrack;
+        const remoteStreams = {};
+        const configuration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+        pc = new RTCPeerConnection(configuration);
+        const peerUsernames = new Map();
+        
+        pc.onicecandidate = ({ candidate }) => candidate && sendSignal({ type: "candidate", candidate });
+        
+        pc.onnegotiationneeded = async () => {
+          try {
+            makingOffer = true;
+            await pc.setLocalDescription();
+            sendSignal({ type: "offer", description: pc.localDescription });
+          } catch (err) {
+            console.error("Negotiation error:", err);
+          } finally {
+            makingOffer = false;
+          }
+        };
+        
+        pc.ontrack = (event) => {
+          const stream = event.streams[0];
+          const remoteUser = lastSignaledUser || "peer";
+          remoteStreams[remoteUser] = stream;
+          updateCamZone(stream, remoteUser);
+        };
+        
+        async function initMedia() {
+          try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+            updateCamZone(localStream, username);
+            updateMicIcon(username, micEnabled);
+          } catch (err) {
+            console.error("Media error:", err);
+          }
+        }
+        
+        function updateCamZone(stream, id = "self") {
+          const camZone = document.getElementById("cam-zone");
+          let camBox = document.getElementById(`cam-box-${id}`);
+        
+          if (!camBox) {
+            camBox = document.createElement("div");
+            camBox.className = "cam-box";
+            camBox.id = `cam-box-${id}`;
+            camBox.innerHTML = `
+              <div style="font-weight:bold; margin-bottom:5px;">${id}</div>
+              <video id="cam-video-${id}" autoplay playsinline ${id === username ? "muted" : ""}></video>
+            `;
+            camZone.appendChild(camBox);
+          }
+        
+          const videoEl = document.getElementById(`cam-video-${id}`);
+          videoEl.srcObject = stream;
+        
+          videoEl.addEventListener("click", () => {
+            openFullscreen(videoEl.srcObject);
+          });
+        }
+        
+        function updateMicIcon(id, micOn) {
+          const micStatus = document.getElementById(`mic-status-${id}`);
+          if (micStatus) {
+            micStatus.textContent = micOn ? "🎙️" : "🔇";
+          }
+        }
+        
+        document.getElementById("toggle-camera").onclick = () => {
+          if (!localStream) return;
+          cameraEnabled = !cameraEnabled;
+          localStream.getVideoTracks().forEach(track => track.enabled = cameraEnabled);
+          document.getElementById("toggle-camera").textContent = cameraEnabled ? "📷 Turn Off Camera" : "📷 Turn On Camera";
+          const camBox = document.getElementById(`cam-box-${username}`);
+          if (camBox) camBox.remove();
+          if (cameraEnabled) {
+            updateCamZone(localStream, username);
+            updateMicIcon(username, micEnabled);
+          }
+          sendSignal({ type: "camera-toggle", username, enabled: cameraEnabled });
+        };
+        
+        document.getElementById("toggle-mic").onclick = () => {
+          if (!localStream) return;
+          micEnabled = !micEnabled;
+          localStream.getAudioTracks().forEach(track => track.enabled = micEnabled);
+          document.getElementById("toggle-mic").textContent = micEnabled ? "🎤 Mute Mic" : "🔇 Unmute Mic";
+          updateMicIcon(username, micEnabled);
+          sendSignal({ type: "mic-toggle", username, enabled: micEnabled });
+        };
+        
+        document.getElementById("toggle-screen").onclick = async () => {
+          if (!screenSharing) {
+            try {
+              const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+              screenTrack = screenStream.getVideoTracks()[0];
+              const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
+              if (sender) await sender.replaceTrack(screenTrack);
+        
+              let localVideo = document.getElementById(`cam-video-${username}`);
+              if (!localVideo) {
+                    updateCamZone(localStream, username); // Recreate the box if missing
+                    localVideo = document.getElementById(`cam-video-${username}`);
+            }
+                if (localVideo) {
+                    localVideo.srcObject = new MediaStream([screenTrack]);
+                }
+        
+              screenTrack.onended = () => stopScreenShare();
+        
+              screenSharing = true;
+              document.getElementById("toggle-screen").textContent = "🛑 Stop Sharing";
+            } catch (err) {
+              console.error("Screen share failed:", err);
+            }
+          } else {
+            stopScreenShare();
+          }
+        };
+        
+        function stopScreenShare() {
+          if (!screenSharing) return;
+          const sender = pc.getSenders().find(s => s.track && s.track.kind === "video");
+          const videoTrack = localStream.getVideoTracks()[0];
+          if (sender && videoTrack) sender.replaceTrack(videoTrack);
+        
+          const localVideo = document.getElementById(`cam-video-${username}`);
+          if (localVideo) {
+            if (cameraEnabled) {
+              localVideo.srcObject = localStream;
+            } else {
+              const camBox = document.getElementById(`cam-box-${username}`);
+              if (camBox) camBox.remove();
+            }
+          }
+        
+          if (screenTrack) screenTrack.stop();
+          screenSharing = false;
+          document.getElementById("toggle-screen").textContent = "🖥️ Share Screen";
+        }
+        
+        const fullscreenOverlay = document.createElement("div");
+        fullscreenOverlay.id = "fullscreen-overlay";
+        fullscreenOverlay.style = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background: rgba(0, 0, 0, 0.8);
+          display: none;
+          justify-content: center;
+          align-items: center;
+          z-index: 9999;
+        `;
+        
+        fullscreenOverlay.innerHTML = `
+          <div id="live-stream-container" style="position:relative; display:flex; flex-direction:column; align-items:center; max-width:90%; max-height:90%;">
+            <button id="close-live-stream" style="position:absolute; top:-40px; right:0; background:#ff4f4f; color:#fff; border:none; border-radius:4px; padding:8px; cursor:pointer; font-weight:bold;">X</button>
+            <video id="live-stream-video" autoplay playsinline style="width:100%; height:auto; max-height:100%; background:#000; border-radius:6px;"></video>
+          </div>
+        `;
+        document.body.appendChild(fullscreenOverlay);
+        
+        const liveStreamVideo = document.getElementById("live-stream-video");
+        const closeBtn = document.getElementById("close-live-stream");
+        
+        function openFullscreen(stream) {
+          if (!stream) return;
+          liveStreamVideo.srcObject = stream;
+          fullscreenOverlay.style.display = "flex";
+        }
+        
+        function closeFullscreen() {
+          fullscreenOverlay.style.display = "none";
+          liveStreamVideo.srcObject = null;
+        }
+        
+        closeBtn.addEventListener("click", closeFullscreen);
+        fullscreenOverlay.addEventListener("click", (e) => {
+          if (e.target === fullscreenOverlay) closeFullscreen();
+        });
+        
+        // --- WebSocket Signaling ---
+        const wsProtocol = location.protocol === "https:" ? "wss" : "ws";
+        const socket = new WebSocket(`${wsProtocol}://${location.host}/ws?username=${username}`);
+        let lastSignaledUser = null;
+        
+        socket.onmessage = async (event) => {
+          const data = JSON.parse(event.data);
+          if (data.username === username) return;
+          lastSignaledUser = data.username;
+        
+          switch (data.type) {
+            case "offer":
+              const offerCollision = makingOffer || pc.signalingState !== "stable";
+              ignoreOffer = !polite && offerCollision;
+              if (ignoreOffer) return;
+              await pc.setRemoteDescription(data.description);
+              const answer = await pc.createAnswer();
+              await pc.setLocalDescription(answer);
+              sendSignal({ type: "answer", description: pc.localDescription });
+              break;
+            case "answer":
+              await pc.setRemoteDescription(data.description);
+              break;
+            case "candidate":
+              await pc.addIceCandidate(data.candidate);
+              break;
+            case "disconnect":
+              const box = document.getElementById(`cam-box-${data.username}`);
+              if (box) box.remove();
+              delete remoteStreams[data.username];
+              break;
+            case "camera-toggle":
+              const camBox = document.getElementById(`cam-box-${data.username}`);
+              if (!data.enabled && camBox) camBox.remove();
+              if (data.enabled && !camBox && remoteStreams[data.username]) {
+                updateCamZone(remoteStreams[data.username], data.username);
+              }
+              break;
+            case "mic-toggle":
+              updateMicIcon(data.username, data.enabled);
+              break;
+          }
+        };
+        
+        function sendSignal(message) {
+          socket.send(JSON.stringify({ username, ...message }));
+        }
+        
+        initMedia();
+    </script>
    
 </body>
 </html>
