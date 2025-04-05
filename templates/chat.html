@@ -138,7 +138,7 @@
             align-items: center;
         }
 
-        /* File upload styles */
+        
         .file-upload {
             position: relative;
             display: flex;
@@ -187,7 +187,7 @@
             border-radius: 0.25rem;
         }
 
-        /* Message attachment styles */
+        
         .message-attachment {
             margin-top: 0.5rem;
             padding: 0.5rem;
@@ -252,7 +252,7 @@
             transform: scale(0.98);
         }
 
-        /* Scrollbar styling */
+        
         #messages::-webkit-scrollbar {
             width: 6px;
         }
@@ -270,7 +270,7 @@
             background: var(--primary-color);
         }
 
-        /* Loading indicator */
+        
         .connecting {
             text-align: center;
             padding: 1rem;
@@ -278,7 +278,7 @@
             font-size: 0.9rem;
         }
 
-        /* Responsive design */
+        
         @media (max-width: 768px) {
             .chat-container {
                 height: 100vh;
@@ -294,7 +294,6 @@
             }
         }
 
-        /* Add styles for channel list */
         .app-container {
             display: flex;
             width: 100%;
@@ -360,7 +359,7 @@
             margin-left: 0.5rem;
         }
 
-        /* Update chat container for new layout */
+        
         .chat-container {
             flex: 1;
             max-width: none;
@@ -368,7 +367,7 @@
             border-radius: 0;
         }
 
-        /* Mobile responsiveness */
+        
         @media (max-width: 768px) {
             .channel-sidebar {
                 width: 100%;
@@ -386,7 +385,6 @@
             }
         }
 
-        /* Add some CSS styles for file attachments */
         .message-attachment {
             margin-top: 8px;
             padding: 8px;
@@ -431,7 +429,7 @@
                 <h2>Channels</h2>
             </div>
             <div class="channel-list" id="channelList">
-                <!-- Channels will be populated here -->
+                
             </div>
         </div>
         <div class="chat-container">
@@ -469,9 +467,9 @@
         project_code = "{{ project_code }}".strip()
     
         if not project_code or project_code == "None":
-            print("❌ ERROR: Missing project_code in template")
+            print("ERROR: Missing project_code in template")
         else:
-            print(f"✅ Project Code Detected: {project_code}")
+            print(f"Project Code Detected: {project_code}")
         
         
         async def fetch_channels():
@@ -489,7 +487,7 @@
                     for channel in data["channels"]:
                         add_channel_to_ui(channel)
             except Exception as e:
-                print(f"❌ Error fetching channels: {e}")
+                print(f"Error fetching channels: {e}")
 
         
         def add_channel_to_ui(channel_name):
@@ -501,7 +499,7 @@
                 channel_item.textContent = channel_name
                 channel_item.href = f"/chat/{channel_name}?user={username}&project_code={project_code}"
             
-                # Highlight active channel
+                
                 if channel_name == chat_id:
                     channel_item.classList.add("active")
             
@@ -522,10 +520,10 @@
                 return  
     
             if reconnect_attempts >= 5:
-                print("❌ WebSocket failed to connect after multiple attempts. Stopping reconnect.")
+                print("WebSocket failed to connect after multiple attempts. Stopping reconnect.")
                 return
     
-            print(f"🔄 Connecting WebSocket... Attempt {reconnect_attempts + 1}")
+            print(f"Connecting WebSocket... Attempt {reconnect_attempts + 1}")
             reconnect_attempts += 1
             ws = WebSocket.new(ws_url)
     
@@ -537,7 +535,7 @@
         def on_open(event):
             """Handle WebSocket connection open."""
             global reconnect_attempts
-            print("✅ WebSocket connection established.")
+            print("WebSocket connection established.")
             reconnect_attempts = 0  
     
         def on_message(event):
@@ -545,15 +543,15 @@
             try:
                 data = json.loads(event.data)
             except Exception as e:
-                print("❌ JSON Parsing Error:", e)
+                print("JSON Parsing Error:", e)
                 return
     
             if data.get("error"):
-                print(f"❌ Server Error: {data['error']}")
+                print(f"Server Error: {data['error']}")
                 return
     
             if data.get("action") == "history":
-                print("📜 Loading chat history...")
+                print("Loading chat history...")
                 messages_div = document.getElementById("messages")
                 messages_div.innerHTML = ""
     
@@ -622,7 +620,6 @@
 
 
             for voter in poll["participants"]:
-                # ❌ Skip rendering vote row for requester
                 if voter == poll["requested_by"]:
                     continue
 
@@ -707,15 +704,15 @@
 
                 data = await response.json()
                 if "updated_poll" in data:
-                    print("✅ Vote submitted and poll updated")
+                    print("Vote submitted and poll updated")
                     old = document.getElementById(f"poll-{poll['task_id']}")
                     if old:
                         old.remove()
                     create_poll_element(data["updated_poll"])
                 else:
-                    print("❌ Failed to update poll:", data)
+                    print("Failed to update poll:", data)
             except Exception as e:
-                print("❌ Error voting on poll:", e)
+                print("Error voting on poll:", e)
 
 
         async def fetch_latest_poll(task_id):
@@ -725,25 +722,25 @@
                 if "poll" in poll_data:
                     create_poll_element(poll_data["poll"])
             except Exception as e:
-                console.log("❌ Failed to fetch latest poll:", e)
+                console.log("Failed to fetch latest poll:", e)
 
 
                 
         def create_message_element(user, message_data):
             messages_div = document.getElementById("messages")
 
-            # ✅ Check if the message is a poll from a system user
+            
             if user == "System":
                 try:
                     parsed = json.loads(message_data)
                     if "poll" in parsed:
                         task_id = parsed["poll"]["task_id"]
 
-                        # Instead of using parsed["poll"] blindly, fetch the latest from backend
+                       
                         asyncio.ensure_future(fetch_latest_poll(task_id))
-                        return  # ✅ Don't continue normal message rendering
+                        return  
                 except:
-                    # If not a poll, treat as plain system text
+                   
                     message_element = document.createElement("div")
                     message_element.classList.add("message", "received")
                     message_element.textContent = message_data
@@ -761,7 +758,6 @@
             content = document.createElement("div")
             content.classList.add("message-content")
 
-            # 📁 Handle file messages (from both stringified and object forms)
             if isinstance(message_data, str):
                 try:
                     data = json.loads(message_data.replace(f"{user}: ", "", 1))
@@ -824,7 +820,6 @@
                     content.textContent = message_data.replace(f"{user}: ", "", 1)
 
             else:
-                # If message_data is already a dict (rare case)
                 if "file" in message_data:
                     if message_data.get("text"):
                         text_div = document.createElement("div")
@@ -891,13 +886,13 @@
 
         def on_error(event):
             """Handle WebSocket errors."""
-            print("❌ WebSocket encountered an error:", event)
+            print("WebSocket encountered an error:", event)
     
         def on_close(event):
             """Handle WebSocket disconnection and attempt reconnect."""
-            print("❌ WebSocket connection closed.")
+            print("WebSocket connection closed.")
             if reconnect_attempts < 5:
-                print(f"🔄 Reconnecting in 2 seconds... (Attempt {reconnect_attempts})")
+                print(f"Reconnecting in 2 seconds... (Attempt {reconnect_attempts})")
                 window.setTimeout(create_proxy(connect_websocket), 2000)
     
         def handle_file_select(event):
@@ -915,10 +910,10 @@
                 if file_type.startswith("image/"):
                     reader = FileReader.new()
                     def on_load(e):
-                        # Create an img element and set its source
+                        
                         img = document.createElement("img")
                         img.src = e.target.result
-                        # Clear previous preview and add the new image
+                        
                         file_preview.innerHTML = ""
                         file_preview.appendChild(img)
                     reader.onload = create_proxy(on_load)
@@ -937,7 +932,7 @@
             form_data.append("user", username)
             
             try:
-                print(f"📤 Uploading file {file.name}...")
+                print(f"Uploading file {file.name}...")
                 response = await window.fetch(
                     f"/upload_file?project_code={project_code}",
                     method="POST",
@@ -945,23 +940,23 @@
                 )
                 
                 if not response.ok:
-                    print(f"❌ Upload failed with status: {response.status}")
+                    print(f"Upload failed with status: {response.status}")
                     return {"success": False, "error": f"HTTP {response.status}"}
                 
                 # Convert the response to a Python dictionary safely
                 try:
                     js_result = await response.json()
-                    # Convert JsProxy to Python dict using Object.entries() and fromEntries()
+                    
                     entries = Object.entries(js_result)
                     result_dict = {str(k): v for k, v in entries}
-                    print(f"📥 Upload response: {json.dumps(result_dict)}")
+                    print(f"Upload response: {json.dumps(result_dict)}")
                     return result_dict
                 except Exception as e:
-                    print(f"❌ Error parsing response: {str(e)}")
+                    print(f"Error parsing response: {str(e)}")
                     return {"success": False, "error": "Failed to parse response"}
                     
             except Exception as e:
-                print("❌ File upload error:", str(e))
+                print("File upload error:", str(e))
                 return {"success": False, "error": str(e)}
     
         async def send_message(event=None):
@@ -970,7 +965,7 @@
             
             # Prevent double submissions
             if is_sending:
-                print("⚠️ Message already being sent, please wait...")
+                print("Message already being sent, please wait...")
                 return
                 
             try:
@@ -982,20 +977,20 @@
                     
                     if current_file:
                         print(f"📤 Attempting to upload file: {current_file.name}")
-                        # Store file type and name before upload
+        
                         file_type = current_file.type
                         original_name = current_file.name
                         
-                        # Upload file first
+                        
                         upload_result = await upload_file(current_file)
                         
-                        # Debug log the result
-                        print(f"📥 Upload result type: {type(upload_result)}")
+                        
+                        print(f" Upload result type: {type(upload_result)}")
                         if upload_result:
-                            print(f"📥 Upload result content: {json.dumps(upload_result)}")
+                            print(f" Upload result content: {json.dumps(upload_result)}")
                         
                         if upload_result and upload_result.get("success", False):
-                            print(f"✅ File uploaded successfully: {upload_result.get('filename', '')}")
+                            print(f" File uploaded successfully: {upload_result.get('filename', '')}")
                             # Send message with file attachment using stored file_type
                             file_data = {
                                 "text": message,
@@ -1007,30 +1002,30 @@
                             }
                             ws.send(f"{username}: {json.dumps(file_data)}")
                             
-                            # Clear file preview and input
+                            
                             document.getElementById("filePreview").classList.remove("show")
                             document.getElementById("fileInput").value = ""
                             current_file = None
-                            print("✅ Message with file sent successfully")
+                            print(" Message with file sent successfully")
                         else:
                             error_msg = upload_result.get("error", "Unknown error") if upload_result else "Upload failed"
-                            print(f"❌ File upload failed: {error_msg}")
+                            print(f" File upload failed: {error_msg}")
                             return
                     elif message:
-                        # Send text-only message
+                        
                         ws.send(f"{username}: {message}")
-                        print("✅ Text message sent successfully")
+                        print(" Text message sent successfully")
                     
                     message_input.value = ""
                 else:
-                    print("❌ Error: WebSocket is closed. Reconnecting...")
+                    print(" Error: WebSocket is closed. Reconnecting...")
                     connect_websocket()
             finally:
                 is_sending = False
     
         connect_websocket()
     
-        # Add event listeners
+        
         document.getElementById("fileInput").addEventListener(
             "change",
             create_proxy(handle_file_select)
@@ -1039,7 +1034,7 @@
         def handle_enter(event):
             if event.key == "Enter" and not event.shiftKey:
                 event.preventDefault()
-                event.stopPropagation()  # Prevent event from triggering multiple times
+                event.stopPropagation()
                 asyncio.ensure_future(send_message())
         
         message_input = document.getElementById("messageInput")
