@@ -529,15 +529,15 @@
         <ul id="notification-list"></ul>
     </div>
 
-    <div id="deadlineModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
+    <<div id="deadlineModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%);
         background:#fff; padding:20px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:10000;">
         <h3>Request New Deadline</h3>
         <input type="date" id="new-deadline-picker" style="margin-top:10px;"/>
         <div style="margin-top:15px;">
-            <button id="confirm-deadline">Confirm</button>
+            <button id="confirm-deadline" disabled>Confirm</button>
             <button id="cancel-deadline">Cancel</button>
         </div>
-    </div>   
+    </div>  
   
     
     
@@ -574,6 +574,7 @@
         import math
         import datetime
         from datetime import timedelta
+        
 
         stored_notifications = []
 
@@ -1709,20 +1710,43 @@
         def open_deadline_modal(task):
             modal = document.getElementById("deadlineModal")
             picker = document.getElementById("new-deadline-picker")
-
+            confirm_button = document.getElementById("confirm-deadline")
+            
             modal.style.display = "block"
-            picker.value = ""
+            picker.value = ""  # Clear previous selection
+            
+            # Get current date and the task's due date (using "date" instead of "due_date")
+            today = datetime.datetime.now().date()
+            task_due_date = datetime.datetime.strptime(task['date'], "%Y-%m-%d").date()  # Accessing 'date' instead of 'due_date'
 
+            # Use js to access setAttribute and disable past dates in the picker
+            js.document.getElementById("new-deadline-picker").setAttribute("min", today.strftime("%Y-%m-%d"))
+            
             def close_modal(e=None):
                 modal.style.display = "none"
-
+            
             def confirm_deadline(e=None):
                 new_date = picker.value
                 if new_date:
                     modal.style.display = "none"
+                    # Trigger your poll request logic
                     asyncio.ensure_future(request_deadline_poll(task, new_date))
+            
+            # Modify the update_confirm_button function to accept the event argument
+            def update_confirm_button(e=None):
+                # Enable the confirm button only if a valid date is selected
+                if picker.value and picker.value > today.strftime("%Y-%m-%d"):
+                    confirm_button.removeAttribute("disabled")
+                else:
+                    confirm_button.setAttribute("disabled", True)
 
+            # Event listener to validate the date picker
+            picker.addEventListener("input", create_proxy(update_confirm_button))
 
+            # Manually call the update_confirm_button to ensure the button is updated initially
+            update_confirm_button()
+
+            # Use create_proxy to bind the functions to the button click events
             document.getElementById("cancel-deadline").addEventListener("click", create_proxy(close_modal))
             document.getElementById("confirm-deadline").addEventListener("click", create_proxy(confirm_deadline))
 
