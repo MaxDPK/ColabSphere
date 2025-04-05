@@ -194,9 +194,10 @@
         <!-- Stream Controls -->
         <div class="stream-controls">
             <div class="stream-controls-inner">
-                <button  id="toggle-camera" >📷</button>
-                <button id="toggle-mic" >🎤</button>
-                <button id="toggle-screen" ">🖥️</button>
+                <button id="toggle-camera">📷</button>
+                <button id="toggle-mic">🎤</button>
+                <button id="toggle-deafen">🎧</button>
+                <button id="toggle-screen">🖥️</button>
             </div>
         </div>
 
@@ -3270,6 +3271,7 @@
         let micEnabled = true;
         let screenSharing = false;
         let screenTrack;
+        let isDeafened = false;
         const remoteStreams = {};
         const configuration = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
         pc = new RTCPeerConnection(configuration);
@@ -3294,6 +3296,14 @@
           const remoteUser = lastSignaledUser || "peer";
           remoteStreams[remoteUser] = stream;
           updateCamZone(stream, remoteUser);
+          
+          // Apply deafen state to new tracks
+          if (isDeafened) {
+            const videoEl = document.getElementById(`cam-video-${remoteUser}`);
+            if (videoEl) {
+              videoEl.muted = true;
+            }
+          }
         };
         
         async function initMedia() {
@@ -3388,7 +3398,7 @@
               screenTrack.onended = () => stopScreenShare();
         
               screenSharing = true;
-              document.getElementById("toggle-screen").textContent = "🛑 Stop Sharing";
+              document.getElementById("toggle-screen").textContent = "🛑";
             } catch (err) {
               console.error("Screen share failed:", err);
             }
@@ -3501,6 +3511,17 @@
             case "mic-toggle":
               updateMicIcon(data.username, data.enabled);
               break;
+            case "deafen-toggle":
+              const deafenIcon = document.getElementById(`mic-status-${data.username}`);
+              if (deafenIcon) {
+                deafenIcon.textContent = data.enabled ? "🔊" : "🎙️";
+              }
+              // Update the video element's muted state for this user
+              const userVideo = document.getElementById(`cam-video-${data.username}`);
+              if (userVideo) {
+                userVideo.muted = data.enabled;
+              }
+              break;
           }
         };
         
@@ -3509,6 +3530,18 @@
         }
         
         initMedia();
+
+        document.getElementById("toggle-deafen").onclick = () => {
+            isDeafened = !isDeafened;
+            const videoElements = document.querySelectorAll('video');
+            videoElements.forEach(video => {
+                if (video.id !== `cam-video-${username}`) {
+                    video.muted = isDeafened;
+                }
+            });
+            document.getElementById("toggle-deafen").textContent = isDeafened ? "🛑" : "🎧";
+            sendSignal({ type: "deafen-toggle", username, enabled: isDeafened });
+        };
     </script>
    
 </body>

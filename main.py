@@ -167,8 +167,8 @@ async def menu(request: Request, user: str):
 
 
     recent_projects = recent_projects_store.get(user, [])[:3]
-     # ✅ Fix: Set `project` as an empty dictionary if no projects exist
-    project = projects[0] if projects else {"code": ""}
+    # Only set project if there are projects
+    project = projects[0] if projects else None
 
     return templates.TemplateResponse(
         "menu.html",
@@ -394,7 +394,7 @@ async def websocket_endpoint(websocket: WebSocket, project_code: str, user: str 
         if user in online_users.get(project_code, set()):
             online_users[project_code].remove(user)
 
-        # ✅ Remove user’s working state too
+        # ✅ Remove user's working state too
         if project_code in working_tasks and user in working_tasks[project_code]:
             del working_tasks[project_code][user]
 
@@ -1592,63 +1592,92 @@ async def upload_file(
         )
     
 
-@app.get("/project_notes/{project_code}")
-async def get_notes(project_code: str):
-    project = db.get_project(project_code)
-    if not project:
-        return {"notes": []}
 
-    if not hasattr(project, 'postit_notes'):
-        project.postit_notes = PersistentList()
-        transaction.commit()
+# Pydantic model for note data input validation
+class NoteData(BaseModel):
+    content: str
+    x: int
+    y: int
+    color: str = "default_color"  # Default color if none is provided
 
-    return {"notes": list(project.postit_notes)}
 
-@app.post("/project_notes/{project_code}/add")
-async def add_note(project_code: str, data: dict = Body(...)):
-    project = db.get_project(project_code)
-    if not project:
-        return {"success": False}
 
-    note = project.add_postit_note(data["content"], data["x"], data["y"], data.get("color"))
-    return {"success": True, "note": note}
+@app.get("/user_notes/{user}")
+async def get_user_notes(user: str):
+    try:
+        notes_data = db.get_user_notes(user)  # Fetch notes using the method defined above
+        return notes_data  # Return the notes
+    except Exception as e:
+        print(f"Error fetching notes: {str(e)}")
+        return {"success": False, "message": f"Error fetching notes: {str(e)}", "notes": []}
 
-@app.post("/project_notes/{project_code}/update")
-async def update_note_content(project_code: str, data: dict = Body(...)):
-    project = db.get_project(project_code)
-    if not project:
-        return {"success": False, "message": "Project not found"}
+@app.post("/user_notes/{user}/add")
+async def add_note_for_user(user: str, data: NoteData):
+    user_obj = db.get_user(user)
+    if not user_obj:
+        return {"success": False, "message": "User not found"}
 
     try:
-        note_id = data["id"]
-        new_content = data["content"]  # The updated content from the frontend
+        print(f"Adding note for user {user}: {data}") 
+        # Use the user's add_note method to add the note
+        note = user_obj.add_note(data.content, data.x, data.y, data.color)
         
-        # Find the note and update its content
-        note = next((note for note in project.postit_notes if note["id"] == note_id), None)
-        if note:
-            note["content"] = new_content  # Update content
-            project._p_changed = True
-            transaction.commit()
-            return {"success": True, "message": "Note updated successfully"}
+        # Return the note data in a simpler form (just the note dictionary, not an object)
+        note_data = {
+            "id": note["id"],
+            "content": note["content"],
+            "x": note["x"],
+            "y": note["y"],
+            "color": note["color"]
+        }
+
+        return {"success": True, "note": note_data}  # Return the simplified note data
+    except Exception as e:
+        return {"success": False, "message": f"Error adding note: {str(e)}"}
+
+@app.post("/user_notes/{user}/update")
+async def update_note_position(user: str, data: dict = Body(...)):
+    """Update the position or content of a note for the user."""
+    note_id = data.get("id")
+    
+    # Handle position update
+    if "x" in data and "y" in data:
+        x = data.get("x")
+        y = data.get("y")
+        if not note_id or x is None or y is None:
+            return {"success": False, "message": "Note ID and position (x, y) are required"}
+        result = db.update_user_note_position(user, note_id, x, y)
+        if result:
+            return {"success": True, "message": "Note position updated"}
         else:
             return {"success": False, "message": "Note not found"}
     
-    except KeyError as e:
-        return {"success": False, "message": f"Missing key: {str(e)}"}
+    # Handle content update
+    elif "content" in data:
+        content = data.get("content")
+        if not note_id or content is None:
+            return {"success": False, "message": "Note ID and content are required"}
+        result = db.update_user_note_content(user, note_id, content)
+        if result:
+            return {"success": True, "message": "Note content updated"}
+        else:
+            return {"success": False, "message": "Note not found"}
+            
+    return {"success": False, "message": "No valid update parameters provided"}
 
 
-@app.post("/project_notes/{project_code}/delete")
-async def delete_note(project_code: str, data: dict = Body(...)):
-    project = db.get_project(project_code)
-    if not project:
-        return {"success": False}
+@app.post("/user_notes/{user}/delete")
+async def delete_note(user: str, data: dict = Body(...)):
+    """Delete a note for the user."""
+    note_id = data.get("id")
+    if not note_id:
+        return {"success": False, "message": "Note ID is required"}
 
-    if not hasattr(project, 'postit_notes'):
-        project.postit_notes = PersistentList()
-        transaction.commit()
-
-    project.delete_postit_note(data["id"])
-    return {"success": True}
+    result = db.delete_user_note(user, note_id)
+    if result:
+        return {"success": True, "message": "Note deleted successfully"}
+    else:
+        return {"success": False, "message": "Note not found"}
 
 
 # Track all WebRTC users globally (or scope this to projects later if you want)

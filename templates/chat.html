@@ -505,7 +505,7 @@
             
                 document.getElementById("channelList").appendChild(channel_item)
     
-        ws_url = f"ws://{window.location.host}/ws/chat/{chat_id}?user={username}&project_code={project_code}"
+        ws_url = f"wss://{window.location.host}/ws/chat/{chat_id}?user={username}&project_code={project_code}"
         print(f"🔍 WebSocket URL: {ws_url}")
     
         ws = None

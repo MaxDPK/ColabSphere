@@ -16,7 +16,52 @@ class User(Persistent):
         self.password = password
         self.profile_pic_data = profile_pic  # Store binary data for profile picture
         self.projects = []  # List of project codes
+        self.notes = PersistentList()
 
+    def add_note(self, content, x, y, color):
+        """Add a new note to the user."""
+        if not isinstance(self.notes, PersistentList):
+            self.notes = PersistentList()  # Initialize notes as PersistentList if it's not already
+        note = {
+            "id": str(uuid.uuid4()),
+            "content": content,
+            "x": x,
+            "y": y,
+            "color": color
+        }
+        self.notes.append(note)
+        self._p_changed = True
+        transaction.commit()
+        return note
+
+
+    def delete_note(self, note_id):
+        """Delete a note from the user."""
+        self.notes = PersistentList(
+            [note for note in self.notes if note["id"] != note_id]
+        )
+        self._p_changed = True
+        transaction.commit()
+
+    def update_note_position(self, note_id, x, y):
+        """Update position of a note."""
+        for note in self.notes:
+            if note["id"] == note_id:
+                note["x"] = x
+                note["y"] = y
+                self._p_changed = True
+                transaction.commit()
+                break
+
+    def update_note_content(self, note_id, new_content):
+        """Update content of a note."""
+        for note in self.notes:
+            if note["id"] == note_id:
+                note["content"] = new_content
+                self._p_changed = True
+                transaction.commit()
+                return True
+        return False
 
 # --------- CHAT CLASS ---------
 class Chat(Persistent):
@@ -58,7 +103,7 @@ class Project(Persistent):
         self.chats = []  # Store chat objects
         self.tasks = PersistentMapping()
         self.deadline_polls = PersistentMapping()
-        self.postit_notes = PersistentList() 
+      
        
         self.create_default_chat()
 
@@ -80,43 +125,7 @@ class Project(Persistent):
 
    
 
-    def add_postit_note(self, content, x, y, color=None):
-        if not hasattr(self, "postit_notes"):
-            self.postit_notes = PersistentList()
-
-        if not color:
-            import random
-            color = random.choice(["#a1eafb", "#fffd82", "#ffa69e", "#b8f2e6", "#ff9f1c", "#c7ceea"])
-
-        note = {
-            "id": str(uuid.uuid4()),
-            "content": content,
-            "x": x,
-            "y": y,
-            "color": color
-        }
-        self.postit_notes.append(note)
-        self._p_changed = True
-        transaction.commit()
-        return note
-
-
-
-    def update_postit_position(self, note_id, x, y):
-        for note in self.postit_notes:
-            if note["id"] == note_id:
-                note["x"] = x
-                note["y"] = y
-                self._p_changed = True
-                transaction.commit()
-                break
-
-    def delete_postit_note(self, note_id):
-        self.postit_notes = PersistentList(
-            [note for note in self.postit_notes if note["id"] != note_id]
-        )
-        self._p_changed = True
-        transaction.commit()
+   
 
     def create_general_chat(self):
         """Ensure a default general chat exists."""
@@ -273,6 +282,50 @@ class Database:
             transaction.commit()
             return True
         return False
+    
+    # --------- USER NOTE MANAGEMENT ---------
+    def get_user_notes(self, username):
+        user = self.get_user(username)
+        if not user:
+            return {"notes": []}  # If user not found, return empty list
+        
+        # Return the user's notes directly
+        if not hasattr(user, 'notes') or user.notes is None:
+            user.notes = PersistentList()
+            user._p_changed = True
+            transaction.commit()
+            
+        return {"notes": list(user.notes), "success": True}
+
+    def add_user_note(self, username, content, x, y, color=None):
+        """Add a new note for the user."""
+        user = self.get_user(username)
+        if not user:
+            return None
+        return user.add_note(content, x, y, color)
+
+    def delete_user_note(self, username, note_id):
+        """Delete a user's note."""
+        user = self.get_user(username)
+        if not user:
+            return False
+        user.delete_note(note_id)
+        return True
+
+    def update_user_note_position(self, username, note_id, x, y):
+        """Update a user's note position."""
+        user = self.get_user(username)
+        if not user:
+            return False
+        user.update_note_position(note_id, x, y)
+        return True
+
+    def update_user_note_content(self, username, note_id, new_content):
+        """Update a user's note content."""
+        user = self.get_user(username)
+        if not user:
+            return False
+        return user.update_note_content(note_id, new_content)
 
     # --------- PROJECT MANAGEMENT ---------
     def create_project(self, name, owner):
