@@ -1249,6 +1249,16 @@
                     if not activity.get("name"):
                         missing_required_fields = True
                         row.style.backgroundColor = "lightcoral"
+                    else:
+                        # ✅ Assign start_date for milestone
+                        activity["start_date"] = calculate_start_date(activity.get("predecessor"))
+                        # ✅ Set end_date to same day as start_date
+                        activity["end_date"] = activity["start_date"]
+                        # ✅ Optional: clear unnecessary fields just in case
+                        activity["hours_to_complete"] = "0"
+                    
+
+                    
                 else:
                     start_date_input = row.querySelector("input[data-field='start_date']")
                     if start_date_input and start_date_input.value:
